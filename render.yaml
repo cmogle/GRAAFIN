@@ -39,7 +39,8 @@ services:
     schedule: "*/5 * * * *"
     buildCommand: echo "No build needed"
     startCommand: |
-      curl -X POST "https://hopachecker-web.onrender.com/api/monitor?key=$MONITOR_SECRET" \
+      APP_URL="${RENDER_SERVICE_URL:-https://hopachecker-web.onrender.com}"
+      curl -X POST "$APP_URL/api/monitor?key=$MONITOR_SECRET" \
         -H "Content-Type: application/json" \
         --max-time 120 \
         --retry 2 \
@@ -50,6 +51,11 @@ services:
           type: web
           name: hopachecker-web
           envVarKey: MONITOR_SECRET
+      - key: RENDER_SERVICE_URL
+        fromService:
+          type: web
+          name: hopachecker-web
+          property: url
 
   # Hourly heartbeat - sends WhatsApp notification to confirm service is running
   - type: cron
@@ -58,7 +64,8 @@ services:
     schedule: "0 * * * *"
     buildCommand: echo "No build needed"
     startCommand: |
-      curl -X POST "https://hopachecker-web.onrender.com/api/heartbeat?key=$MONITOR_SECRET" \
+      APP_URL="${RENDER_SERVICE_URL:-https://hopachecker-web.onrender.com}"
+      curl -X POST "$APP_URL/api/heartbeat?key=$MONITOR_SECRET" \
         -H "Content-Type: application/json" \
         --max-time 30 \
         --retry 2 \
@@ -69,3 +76,8 @@ services:
           type: web
           name: hopachecker-web
           envVarKey: MONITOR_SECRET
+      - key: RENDER_SERVICE_URL
+        fromService:
+          type: web
+          name: hopachecker-web
+          property: url

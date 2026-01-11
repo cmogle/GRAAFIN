@@ -87,25 +87,27 @@
     .status-bar {
       background: #fff;
       border-radius: 8px;
-      padding: 10px 14px;
+      padding: 12px 16px;
       margin-bottom: 16px;
       display: flex;
       justify-content: center;
       align-items: center;
       flex-wrap: wrap;
-      gap: 12px;
+      gap: 16px;
       box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-      font-size: 0.8rem;
+      font-size: 0.85rem;
     }
     .status-item {
       color: #666;
+      display: flex;
+      align-items: center;
+      gap: 6px;
     }
     .status-dot {
       display: inline-block;
       width: 8px;
       height: 8px;
       border-radius: 50%;
-      margin-right: 5px;
     }
     .status-dot.up { background: #22c55e; }
     .status-dot.down { background: #ef4444; }
@@ -156,6 +158,8 @@
       display: flex;
       justify-content: space-between;
       align-items: center;
+      flex-wrap: wrap;
+      gap: 12px;
     }
     .results-header.hm-active {
       background: #eff6ff;
@@ -182,6 +186,7 @@
       cursor: pointer;
       text-decoration: none;
       transition: background 0.2s;
+      display: inline-block;
     }
     .btn-primary {
       background: #0986e6;
@@ -213,6 +218,25 @@
       color: #555;
       font-size: 0.8rem;
       text-transform: uppercase;
+      cursor: pointer;
+      user-select: none;
+      position: relative;
+    }
+    th:hover {
+      background: #e9ecef;
+    }
+    th.sortable::after {
+      content: ' ↕';
+      opacity: 0.3;
+      font-size: 0.7rem;
+    }
+    th.sort-asc::after {
+      content: ' ↑';
+      opacity: 1;
+    }
+    th.sort-desc::after {
+      content: ' ↓';
+      opacity: 1;
     }
     tr:hover {
       background: #f8f9fa;
@@ -223,6 +247,7 @@
     .confidence {
       font-size: 0.75rem;
       color: #999;
+      margin-left: 6px;
     }
     .no-results {
       padding: 50px 20px;
@@ -233,10 +258,35 @@
       font-size: 3rem;
       margin-bottom: 12px;
     }
+    .no-results .suggestion {
+      margin-top: 12px;
+      font-size: 0.9rem;
+      color: #666;
+    }
     .loading {
       padding: 40px;
       text-align: center;
       color: #888;
+    }
+    .skeleton {
+      padding: 12px 14px;
+      border-bottom: 1px solid #eee;
+    }
+    .skeleton-line {
+      height: 16px;
+      background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+      background-size: 200% 100%;
+      animation: loading 1.5s ease-in-out infinite;
+      border-radius: 4px;
+      margin-bottom: 8px;
+    }
+    .skeleton-line:last-child {
+      margin-bottom: 0;
+      width: 60%;
+    }
+    @keyframes loading {
+      0% { background-position: 200% 0; }
+      100% { background-position: -200% 0; }
     }
     .error-msg {
       background: #fef2f2;
@@ -246,6 +296,32 @@
       margin-bottom: 16px;
       font-size: 0.9rem;
     }
+    .pagination-info {
+      padding: 12px 16px;
+      background: #f8f9fa;
+      border-top: 1px solid #e0e0e0;
+      font-size: 0.85rem;
+      color: #666;
+      text-align: center;
+    }
+    .load-more-btn {
+      width: 100%;
+      padding: 10px;
+      background: #f8f9fa;
+      border: none;
+      border-top: 1px solid #e0e0e0;
+      cursor: pointer;
+      font-size: 0.9rem;
+      color: #0986e6;
+      transition: background 0.2s;
+    }
+    .load-more-btn:hover {
+      background: #e9ecef;
+    }
+    .load-more-btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
 
     @media (max-width: 600px) {
       h1 { font-size: 1.3rem; }
@@ -253,8 +329,11 @@
       .race-tab .race-icon { font-size: 1.5rem; }
       .race-tab .race-name { font-size: 1rem; }
       .search-input { font-size: 1rem; padding: 12px 14px; }
-      th, td { padding: 10px 10px; font-size: 0.85rem; }
-      .status-bar { flex-direction: column; gap: 6px; }
+      th, td { padding: 10px 8px; font-size: 0.85rem; }
+      .status-bar { flex-direction: column; gap: 8px; }
+      .results-header { flex-direction: column; align-items: flex-start; }
+      table { font-size: 0.85rem; }
+      th.sortable::after { display: none; }
     }
   </style>
 </head>
@@ -290,7 +369,7 @@
         placeholder="Search by name..."
         autocomplete="off"
       >
-      <p class="search-hint">Fuzzy search enabled - finds similar names</p>
+      <p class="search-hint">Fuzzy search enabled - finds similar names • Press / to focus</p>
     </div>
 
     <div id="error-container"></div>
@@ -299,8 +378,8 @@
       <div class="results-header hm-active" id="results-header">
         <span class="results-count" id="results-count">Select a race above</span>
         <div class="download-btns">
-          <a href="/api/download/csv" class="btn btn-secondary">CSV</a>
-          <a href="/api/download/json" class="btn btn-primary">JSON</a>
+          <a href="/api/download/csv" class="btn btn-secondary" id="csv-download">CSV</a>
+          <a href="/api/download/json" class="btn btn-primary" id="json-download">JSON</a>
         </div>
       </div>
       <div id="results-container">
@@ -321,12 +400,58 @@
     const errorContainer = document.getElementById('error-container');
     const hmCountEl = document.getElementById('hm-count');
     const tenkCountEl = document.getElementById('tenk-count');
+    const csvDownload = document.getElementById('csv-download');
+    const jsonDownload = document.getElementById('json-download');
 
     let debounceTimer;
-    let currentRace = 'hm'; // 'hm' or 'tenk'
+    let currentRace = 'hm';
     let cachedResults = null;
+    let currentResults = [];
+    let currentSort = { column: null, direction: 'asc' };
+    let searchQuery = '';
 
-    function selectRace(race) {
+    // Load state from URL on page load
+    function loadStateFromURL() {
+      const params = new URLSearchParams(window.location.search);
+      const race = params.get('race');
+      const query = params.get('q');
+      
+      if (race === 'tenk' || race === '10k') {
+        currentRace = 'tenk';
+        selectRace('tenk', false);
+      } else if (race === 'hm' || race === 'half') {
+        currentRace = 'hm';
+        selectRace('hm', false);
+      }
+      
+      if (query) {
+        searchInput.value = query;
+        searchQuery = query;
+        doSearch(query, false);
+      }
+    }
+
+    // Update URL with current state
+    function updateURL() {
+      const params = new URLSearchParams();
+      if (currentRace) {
+        params.set('race', currentRace === 'hm' ? 'hm' : 'tenk');
+      }
+      if (searchQuery) {
+        params.set('q', searchQuery);
+      }
+      const newURL = params.toString() ? `?${params.toString()}` : window.location.pathname;
+      window.history.replaceState({}, '', newURL);
+    }
+
+    // Update download links with race filter
+    function updateDownloadLinks() {
+      const raceParam = currentRace === 'hm' ? 'half' : '10k';
+      csvDownload.href = `/api/download/csv?race=${raceParam}`;
+      jsonDownload.href = `/api/download/json?race=${raceParam}`;
+    }
+
+    function selectRace(race, updateURL = true) {
       currentRace = race;
 
       // Update tab styles
@@ -347,11 +472,15 @@
       const raceName = race === 'hm' ? 'Half Marathon' : '10K';
       searchInput.placeholder = `Search ${raceName} results...`;
 
+      // Update download links
+      updateDownloadLinks();
+
       // Re-run search if there's a query
       if (searchInput.value.trim()) {
-        doSearch(searchInput.value);
+        doSearch(searchInput.value, updateURL);
       } else {
         showInitialState();
+        if (updateURL) updateURL();
       }
     }
 
@@ -364,6 +493,17 @@
         </div>
       `;
       resultsCount.textContent = `${raceName} Results`;
+      currentResults = [];
+    }
+
+    // Show skeleton loader
+    function showSkeletonLoader() {
+      let html = '<table><thead><tr><th>Pos</th><th>Bib</th><th>Name</th><th>Gender</th><th>Category</th><th>Time</th></tr></thead><tbody>';
+      for (let i = 0; i < 5; i++) {
+        html += '<tr class="skeleton"><td><div class="skeleton-line"></div></td><td><div class="skeleton-line"></div></td><td><div class="skeleton-line"></div></td><td><div class="skeleton-line"></div></td><td><div class="skeleton-line"></div></td><td><div class="skeleton-line"></div></td></tr>';
+      }
+      html += '</tbody></table>';
+      resultsContainer.innerHTML = html;
     }
 
     // Fetch and display status
@@ -375,13 +515,17 @@
         const statusClass = data.monitor.lastStatus === 'up' ? 'up' :
                            data.monitor.lastStatus === 'down' ? 'down' : 'unknown';
 
-        let statusHtml = `<span class="status-item"><span class="status-dot ${statusClass}"></span>API: ${data.monitor.lastStatus}</span>`;
+        let statusHtml = `<span class="status-item"><span class="status-dot ${statusClass}"></span><strong>API:</strong> ${data.monitor.lastStatus.toUpperCase()}</span>`;
 
         if (data.hasResults && data.scrapedAt) {
           const date = new Date(data.scrapedAt);
-          statusHtml += `<span class="status-item">Updated: ${date.toLocaleString()}</span>`;
+          statusHtml += `<span class="status-item"><strong>Updated:</strong> ${date.toLocaleString()}</span>`;
         } else {
           statusHtml += `<span class="status-item">Waiting for results...</span>`;
+        }
+
+        if (data.resultCount > 0) {
+          statusHtml += `<span class="status-item"><strong>Total Results:</strong> ${data.resultCount}</span>`;
         }
 
         statusBar.innerHTML = statusHtml;
@@ -408,14 +552,91 @@
       }
     }
 
-    // Perform search
-    async function doSearch(query) {
-      if (!query.trim()) {
+    // Sort results (global for onclick handlers)
+    window.sortResults = function(column) {
+      if (currentSort.column === column) {
+        currentSort.direction = currentSort.direction === 'asc' ? 'desc' : 'asc';
+      } else {
+        currentSort.column = column;
+        currentSort.direction = 'asc';
+      }
+      renderResults();
+    };
+
+    // Render results table
+    function renderResults() {
+      if (currentResults.length === 0) {
         showInitialState();
         return;
       }
 
-      resultsContainer.innerHTML = '<div class="loading">Searching...</div>';
+      // Sort if needed
+      let sortedResults = [...currentResults];
+      if (currentSort.column) {
+        sortedResults.sort((a, b) => {
+          let aVal = a[currentSort.column];
+          let bVal = b[currentSort.column];
+          
+          // Handle numeric sorting for position
+          if (currentSort.column === 'position') {
+            aVal = parseInt(aVal) || 0;
+            bVal = parseInt(bVal) || 0;
+          } else {
+            aVal = String(aVal || '').toLowerCase();
+            bVal = String(bVal || '').toLowerCase();
+          }
+          
+          if (aVal < bVal) return currentSort.direction === 'asc' ? -1 : 1;
+          if (aVal > bVal) return currentSort.direction === 'asc' ? 1 : -1;
+          return 0;
+        });
+      }
+
+      resultsCount.textContent = `${sortedResults.length} result${sortedResults.length !== 1 ? 's' : ''}`;
+
+      let html = `
+        <table>
+          <thead>
+            <tr>
+              <th class="sortable ${currentSort.column === 'position' ? (currentSort.direction === 'asc' ? 'sort-asc' : 'sort-desc') : ''}" onclick="sortResults('position')">Pos</th>
+              <th class="sortable ${currentSort.column === 'bibNumber' ? (currentSort.direction === 'asc' ? 'sort-asc' : 'sort-desc') : ''}" onclick="sortResults('bibNumber')">Bib</th>
+              <th class="sortable ${currentSort.column === 'name' ? (currentSort.direction === 'asc' ? 'sort-asc' : 'sort-desc') : ''}" onclick="sortResults('name')">Name</th>
+              <th class="sortable ${currentSort.column === 'gender' ? (currentSort.direction === 'asc' ? 'sort-asc' : 'sort-desc') : ''}" onclick="sortResults('gender')">Gender</th>
+              <th class="sortable ${currentSort.column === 'category' ? (currentSort.direction === 'asc' ? 'sort-asc' : 'sort-desc') : ''}" onclick="sortResults('category')">Category</th>
+              <th class="sortable ${currentSort.column === 'finishTime' ? (currentSort.direction === 'asc' ? 'sort-asc' : 'sort-desc') : ''}" onclick="sortResults('finishTime')">Time</th>
+            </tr>
+          </thead>
+          <tbody>
+      `;
+
+      for (const r of sortedResults) {
+        html += `
+          <tr>
+            <td>${r.position}</td>
+            <td>${r.bibNumber || '-'}</td>
+            <td class="name-cell">${escapeHtml(r.name)} <span class="confidence">${r.confidence}%</span></td>
+            <td>${r.gender || '-'}</td>
+            <td>${r.category || '-'}</td>
+            <td>${r.finishTime || '-'}</td>
+          </tr>
+        `;
+      }
+
+      html += '</tbody></table>';
+      resultsContainer.innerHTML = html;
+    }
+
+    // Perform search
+    async function doSearch(query, updateURL = true) {
+      if (!query.trim()) {
+        showInitialState();
+        searchQuery = '';
+        if (updateURL) updateURL();
+        return;
+      }
+
+      searchQuery = query;
+      showSkeletonLoader();
 
       try {
         const raceFilter = currentRace === 'hm' ? 'Half Marathon' : '10km';
@@ -426,12 +647,14 @@
           errorContainer.innerHTML = `<div class="error-msg">${data.error}</div>`;
           resultsContainer.innerHTML = '<div class="no-results"><div class="icon">⏳</div><div>Results not yet available</div></div>';
           resultsCount.textContent = '0 results';
+          currentResults = [];
+          if (updateURL) updateURL();
           return;
         }
 
         errorContainer.innerHTML = '';
 
-        // Filter by race (in case server doesn't filter)
+        // Filter by race (server should already filter, but double-check)
         const filtered = data.results.filter(r =>
           (currentRace === 'hm' && r.race === 'Half Marathon') ||
           (currentRace === 'tenk' && r.race === '10km')
@@ -439,43 +662,34 @@
 
         if (filtered.length === 0) {
           const raceName = currentRace === 'hm' ? 'Half Marathon' : '10K';
-          resultsContainer.innerHTML = `<div class="no-results"><div class="icon">🔍</div><div>No ${raceName} matches for "${escapeHtml(query)}"</div></div>`;
+          let suggestion = '';
+          if (query.length > 3) {
+            suggestion = '<div class="suggestion">Try checking spelling or searching with a partial name</div>';
+          }
+          resultsContainer.innerHTML = `<div class="no-results"><div class="icon">🔍</div><div>No ${raceName} matches for "${escapeHtml(query)}"</div>${suggestion}</div>`;
           resultsCount.textContent = '0 results';
+          currentResults = [];
+          if (updateURL) updateURL();
           return;
         }
 
-        resultsCount.textContent = `${filtered.length} result${filtered.length !== 1 ? 's' : ''}`;
+        currentResults = filtered;
+        currentSort = { column: null, direction: 'asc' };
+        renderResults();
 
-        let html = `
-          <table>
-            <thead>
-              <tr>
-                <th>Pos</th>
-                <th>Bib</th>
-                <th>Name</th>
-                <th>Time</th>
-              </tr>
-            </thead>
-            <tbody>
-        `;
-
-        for (const r of filtered) {
-          html += `
-            <tr>
-              <td>${r.position}</td>
-              <td>${r.bibNumber || '-'}</td>
-              <td class="name-cell">${escapeHtml(r.name)} <span class="confidence">${r.confidence}%</span></td>
-              <td>${r.finishTime || '-'}</td>
-            </tr>
-          `;
+        // Show pagination info if limited
+        if (data.hasMore || data.total >= data.limit) {
+          const paginationInfo = document.createElement('div');
+          paginationInfo.className = 'pagination-info';
+          paginationInfo.textContent = `Showing ${filtered.length} of ${data.total} result${data.total !== 1 ? 's' : ''}${data.hasMore ? ' (limited to 20)' : ''}`;
+          resultsContainer.appendChild(paginationInfo);
         }
 
-        html += '</tbody></table>';
-        resultsContainer.innerHTML = html;
-
+        if (updateURL) updateURL();
       } catch (e) {
         resultsContainer.innerHTML = '<div class="no-results"><div class="icon">⚠️</div><div>Error searching. Please try again.</div></div>';
         resultsCount.textContent = 'Error';
+        currentResults = [];
       }
     }
 
@@ -493,9 +707,26 @@
       }, 300);
     });
 
+    // Keyboard shortcuts
+    document.addEventListener('keydown', (e) => {
+      // Focus search with /
+      if (e.key === '/' && document.activeElement !== searchInput && !e.ctrlKey && !e.metaKey) {
+        e.preventDefault();
+        searchInput.focus();
+      }
+      // Clear search with Esc
+      if (e.key === 'Escape' && document.activeElement === searchInput) {
+        searchInput.value = '';
+        searchInput.blur();
+        showInitialState();
+        updateURL();
+      }
+    });
+
     // Initial load
+    loadStateFromURL();
     loadStatus();
-    showInitialState();
+    updateDownloadLinks();
 
     // Refresh status periodically
     setInterval(loadStatus, 60000);

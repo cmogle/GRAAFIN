@@ -2,6 +2,8 @@ import express from 'express';
 import * as path from 'path';
 import { fileURLToPath } from 'url';
 import * as dotenv from 'dotenv';
+import cors from 'cors';
+import rateLimit from 'express-rate-limit';
 import Fuse, { type IFuseOptions } from 'fuse.js';
 import { loadResults, getResultsFilePath, scrapeAllResults, saveResults } from './scraper.js';
 import { loadState, monitor, formatStatusMessage } from './monitor.js';
@@ -16,6 +18,23 @@ const __dirname = path.dirname(__filename);
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+// Rate limiting middleware
+const apiLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 100, // Limit each IP to 100 requests per windowMs
+  message: 'Too many requests from this IP, please try again later.',
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+const searchLimiter = rateLimit({
+  windowMs: 1 * 60 * 1000, // 1 minute
+  max: 30, // Limit each IP to 30 search requests per minute
+  message: 'Too many search requests, please try again later.',
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
 // Fuse.js configuration for fuzzy search
 const FUSE_OPTIONS: IFuseOptions<RaceResult & { race: string }> = {
   keys: ['name'],
@@ -25,8 +44,17 @@ const FUSE_OPTIONS: IFuseOptions<RaceResult & { race: string }> = {
   minMatchCharLength: 2,
 };
 
+// CORS middleware
+app.use(cors({
+  origin: process.env.CORS_ORIGIN || '*',
+  credentials: true,
+}));
+
 // Serve static files
 app.use(express.static(path.join(__dirname, 'public')));
+
+// Apply rate limiting to API routes
+app.use('/api/', apiLimiter);
 
 // API: Get current status
 app.get('/api/status', (_req, res) => {
@@ -45,11 +73,20 @@ app.get('/api/status', (_req, res) => {
 });
 
 // API: Search results
-app.get('/api/search', (req, res) => {
-  const query = (req.query.q as string || '').trim();
+app.get('/api/search', searchLimiter, (req, res) => {
+  // Input validation
+  let query = (req.query.q as string || '').trim();
+  
+  // Limit query length to prevent performance issues
+  if (query.length > 100) {
+    query = query.substring(0, 100);
+  }
 
-  if (!query) {
-    return res.json({ query: '', results: [], total: 0 });
+  // Sanitize query - remove potentially dangerous characters
+  query = query.replace(/[<>]/g, '');
+
+  if (!query || query.length < 2) {
+    return res.json({ query: '', results: [], total: 0, limit: 20 });
   }
 
   const data = loadResults();
@@ -58,17 +95,27 @@ app.get('/api/search', (req, res) => {
       query,
       results: [],
       total: 0,
+      limit: 20,
       error: 'No results available yet. Check back later.',
     });
   }
 
-  // Combine all results with race type
-  const allResults: (RaceResult & { race: string })[] = [
-    ...data.categories.halfMarathon.map(r => ({ ...r, race: 'Half Marathon' })),
-    ...data.categories.tenKm.map(r => ({ ...r, race: '10km' })),
-  ];
+  // Get race filter from query parameter
+  const raceParam = (req.query.race as string || '').toLowerCase();
+  const raceFilter = raceParam === '10km' || raceParam === '10k' ? 'tenKm' :
+                     raceParam === 'half marathon' || raceParam === 'half' ? 'halfMarathon' : 'all';
 
-  const fuse = new Fuse(allResults, FUSE_OPTIONS);
+  // Filter results by race type before searching
+  let resultsToSearch: (RaceResult & { race: string })[] = [];
+  
+  if (raceFilter === 'halfMarathon' || raceFilter === 'all') {
+    resultsToSearch.push(...data.categories.halfMarathon.map(r => ({ ...r, race: 'Half Marathon' })));
+  }
+  if (raceFilter === 'tenKm' || raceFilter === 'all') {
+    resultsToSearch.push(...data.categories.tenKm.map(r => ({ ...r, race: '10km' })));
+  }
+
+  const fuse = new Fuse(resultsToSearch, FUSE_OPTIONS);
   const matches = fuse.search(query, { limit: 20 });
 
   const results = matches.map(match => ({
@@ -86,36 +133,75 @@ app.get('/api/search', (req, res) => {
     query,
     results,
     total: results.length,
+    limit: 20,
+    hasMore: matches.length === 20,
     scrapedAt: data.scrapedAt,
   });
 });
 
-// API: Download all results as JSON
-app.get('/api/download/json', (_req, res) => {
+// API: Download results as JSON
+app.get('/api/download/json', (req, res) => {
   const data = loadResults();
   if (!data) {
     return res.status(404).json({ error: 'No results available' });
+  }
+
+  // Get race filter from query parameter
+  const raceParam = (req.query.race as string || '').toLowerCase();
+  const raceFilter = raceParam === '10km' || raceParam === '10k' ? 'tenKm' :
+                     raceParam === 'half marathon' || raceParam === 'half' ? 'halfMarathon' : 'all';
+
+  let resultsToExport;
+  let filename = 'dcs-results.json';
+
+  if (raceFilter === 'halfMarathon') {
+    resultsToExport = {
+      ...data,
+      categories: { halfMarathon: data.categories.halfMarathon, tenKm: [] },
+    };
+    filename = 'dcs-half-marathon-results.json';
+  } else if (raceFilter === 'tenKm') {
+    resultsToExport = {
+      ...data,
+      categories: { halfMarathon: [], tenKm: data.categories.tenKm },
+    };
+    filename = 'dcs-10km-results.json';
+  } else {
+    resultsToExport = data;
   }
 
   res.setHeader('Content-Type', 'application/json');
-  res.setHeader(
-    'Content-Disposition',
-    'attachment; filename="dcs-half-marathon-results.json"'
-  );
-  return res.json(data);
+  res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+  return res.json(resultsToExport);
 });
 
-// API: Download all results as CSV
-app.get('/api/download/csv', (_req, res) => {
+// API: Download results as CSV
+app.get('/api/download/csv', (req, res) => {
   const data = loadResults();
   if (!data) {
     return res.status(404).json({ error: 'No results available' });
   }
 
-  const allResults = [
-    ...data.categories.halfMarathon.map(r => ({ ...r, race: 'Half Marathon' })),
-    ...data.categories.tenKm.map(r => ({ ...r, race: '10km' })),
-  ];
+  // Get race filter from query parameter
+  const raceParam = (req.query.race as string || '').toLowerCase();
+  const raceFilter = raceParam === '10km' || raceParam === '10k' ? 'tenKm' :
+                     raceParam === 'half marathon' || raceParam === 'half' ? 'halfMarathon' : 'all';
+
+  let allResults: (RaceResult & { race: string })[] = [];
+  let filename = 'dcs-results.csv';
+
+  if (raceFilter === 'halfMarathon') {
+    allResults = data.categories.halfMarathon.map(r => ({ ...r, race: 'Half Marathon' }));
+    filename = 'dcs-half-marathon-results.csv';
+  } else if (raceFilter === 'tenKm') {
+    allResults = data.categories.tenKm.map(r => ({ ...r, race: '10km' }));
+    filename = 'dcs-10km-results.csv';
+  } else {
+    allResults = [
+      ...data.categories.halfMarathon.map(r => ({ ...r, race: 'Half Marathon' })),
+      ...data.categories.tenKm.map(r => ({ ...r, race: '10km' })),
+    ];
+  }
 
   // Create CSV
   const headers = ['Position', 'Bib', 'Name', 'Gender', 'Category', 'Time', 'Race'];
@@ -132,10 +218,7 @@ app.get('/api/download/csv', (_req, res) => {
   const csv = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
 
   res.setHeader('Content-Type', 'text/csv');
-  res.setHeader(
-    'Content-Disposition',
-    'attachment; filename="dcs-half-marathon-results.csv"'
-  );
+  res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
   return res.send(csv);
 });
 
