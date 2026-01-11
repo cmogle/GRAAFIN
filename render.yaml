@@ -1,0 +1,53 @@
+# Render Blueprint specification
+# https://render.com/docs/blueprint-spec
+
+services:
+  # Web service for search UI and API
+  - type: web
+    name: hopachecker-web
+    runtime: node
+    buildCommand: npm install && npm run build
+    startCommand: node dist/server.js
+    disk:
+      name: hopachecker-data
+      mountPath: /data
+      sizeGB: 1
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATA_PATH
+        value: /data
+      - key: PORT
+        value: 3000
+
+  # Cron job for monitoring (runs every 5 minutes)
+  - type: cron
+    name: hopachecker-monitor
+    runtime: node
+    schedule: "*/5 * * * *"
+    buildCommand: npm install && npm run build
+    startCommand: node dist/index.js monitor --notify --auto-scrape
+    disk:
+      name: hopachecker-data
+      mountPath: /data
+      sizeGB: 1
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATA_PATH
+        value: /data
+      - key: APP_URL
+        fromService:
+          type: web
+          name: hopachecker-web
+          property: host
+      - key: TARGET_URL
+        sync: false
+      - key: TWILIO_ACCOUNT_SID
+        sync: false
+      - key: TWILIO_AUTH_TOKEN
+        sync: false
+      - key: TWILIO_WHATSAPP_FROM
+        sync: false
+      - key: NOTIFY_WHATSAPP
+        sync: false
