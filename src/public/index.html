@@ -41,6 +41,10 @@
       gap: 12px;
       margin-bottom: 16px;
     }
+    /* Hide Plus500 tab (can be reactivated by removing this rule) */
+    .event-tab[data-event="plus500"] {
+      display: none;
+    }
     .event-tab {
       flex: 1;
       padding: 14px 16px;
@@ -631,10 +635,10 @@
     </div>
 
     <div class="mode-tabs">
-      <button class="mode-tab active" data-mode="single" onclick="toggleMode('single')">
+      <button class="mode-tab" data-mode="single" onclick="toggleMode('single')">
         Single Search
       </button>
-      <button class="mode-tab" data-mode="multi" onclick="toggleMode('multi')">
+      <button class="mode-tab active" data-mode="multi" onclick="toggleMode('multi')">
         Multi-Athlete Ranking
       </button>
     </div>
@@ -720,7 +724,7 @@
     let currentResults = [];
     let currentSort = { column: null, direction: 'asc' };
     let searchQuery = '';
-    let currentMode = 'single';
+    let currentMode = 'multi';
     let selectedAthletes = [];
     let rankingSort = { column: 'position', direction: 'asc' };
 
@@ -813,7 +817,10 @@
         selectRace('hm', false);
       }
       
-      if (mode === 'multi') {
+      if (mode === 'single') {
+        toggleMode('single', false);
+      } else {
+        // Default to multi mode
         toggleMode('multi', false);
         // Load selected athletes from URL if present
         const selected = params.get('selected');
@@ -827,8 +834,6 @@
             // Invalid JSON, ignore
           }
         }
-      } else {
-        toggleMode('single', false);
       }
       
       if (query) {
