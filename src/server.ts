@@ -372,9 +372,20 @@ app.post('/api/heartbeat', async (req, res) => {
   const notifyWhatsapp = process.env.NOTIFY_WHATSAPP || '';
 
   if (!isTwilioConfigured(twilioConfig) || !notifyWhatsapp) {
-    console.log('   ⚠️ Twilio not configured');
-    return res.status(400).json({ success: false, error: 'Twilio not configured' });
+    const missing = [];
+    if (!twilioConfig.accountSid) missing.push('TWILIO_ACCOUNT_SID');
+    if (!twilioConfig.authToken) missing.push('TWILIO_AUTH_TOKEN');
+    if (!notifyWhatsapp) missing.push('NOTIFY_WHATSAPP');
+    
+    console.log(`   ⚠️ Twilio not configured. Missing: ${missing.join(', ')}`);
+    return res.status(400).json({ 
+      success: false, 
+      error: 'Twilio not configured',
+      missing,
+    });
   }
+
+  console.log(`   📱 Twilio configured, sending to: ${notifyWhatsapp}`);
 
   // Get current status for the heartbeat message
   const state = loadState();
