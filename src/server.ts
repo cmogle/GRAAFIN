@@ -355,11 +355,11 @@ app.get('/api/monitor', async (req, res) => {
   return app._router.handle(req, res, () => {});
 });
 
-// API: Scrape EvoChip results
-app.post('/api/scrape/evochip', async (req, res) => {
+// API: Scrape EvoChip results handler
+async function handleEvoChipScrape(req: express.Request, res: express.Response) {
   // Public endpoint for one-time scraping (no auth required)
 
-  const evoChipUrl = req.body?.url || process.env.EVOCHIP_URL || 
+  const evoChipUrl = (req.body?.url as string) || (req.query.url as string) || process.env.EVOCHIP_URL || 
     'https://evochip.hu/results/result.php?distance=hm&category=none&timepoint=none&eventid=DubaiCreekHalf26DAd&year=&lang=en&css=evochip.css&iframe=0&mobile=0&viewport=device-width';
 
   console.log(`\n📥 EvoChip scrape triggered: ${new Date().toISOString()}`);
@@ -390,14 +390,13 @@ app.post('/api/scrape/evochip', async (req, res) => {
       timestamp: new Date().toISOString(),
     });
   }
-});
+}
+
+// API: Scrape EvoChip results (POST)
+app.post('/api/scrape/evochip', handleEvoChipScrape);
 
 // Also support GET for easy testing
-app.get('/api/scrape/evochip', async (req, res) => {
-  // Redirect to POST handler
-  req.method = 'POST';
-  return app._router.handle(req, res, () => {});
-});
+app.get('/api/scrape/evochip', handleEvoChipScrape);
 
 // API: Heartbeat - send periodic "still monitoring" notification
 app.post('/api/heartbeat', async (req, res) => {
