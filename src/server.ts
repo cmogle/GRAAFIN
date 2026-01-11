@@ -354,13 +354,7 @@ app.get('/api/monitor', async (req, res) => {
 
 // API: Scrape EvoChip results
 app.post('/api/scrape/evochip', async (req, res) => {
-  // Simple auth via secret key (optional, same pattern as monitor)
-  const authKey = req.headers['x-monitor-key'] || req.query.key;
-  const expectedKey = process.env.MONITOR_SECRET;
-
-  if (expectedKey && authKey !== expectedKey) {
-    return res.status(401).json({ error: 'Unauthorized' });
-  }
+  // Public endpoint for one-time scraping (no auth required)
 
   const evoChipUrl = req.body.url || process.env.EVOCHIP_URL || 
     'https://evochip.hu/results/result.php?distance=hm&category=none&timepoint=none&eventid=DubaiCreekHalf26DAd&year=&lang=en&css=evochip.css&iframe=0&mobile=0&viewport=device-width';
