@@ -233,6 +233,57 @@ app.get('/api/monitor', async (req, res) => {
   return app._router.handle(req, res, () => {});
 });
 
+// API: Heartbeat - send periodic "still monitoring" notification
+app.post('/api/heartbeat', async (req, res) => {
+  // Simple auth via secret key
+  const authKey = req.headers['x-monitor-key'] || req.query.key;
+  const expectedKey = process.env.MONITOR_SECRET;
+
+  if (expectedKey && authKey !== expectedKey) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+
+  console.log(`\n💓 Heartbeat triggered: ${new Date().toISOString()}`);
+
+  const twilioConfig = {
+    accountSid: process.env.TWILIO_ACCOUNT_SID || '',
+    authToken: process.env.TWILIO_AUTH_TOKEN || '',
+    whatsappFrom: process.env.TWILIO_WHATSAPP_FROM || 'whatsapp:+14155238886',
+  };
+  const notifyWhatsapp = process.env.NOTIFY_WHATSAPP || '';
+
+  if (!isTwilioConfigured(twilioConfig) || !notifyWhatsapp) {
+    console.log('   ⚠️ Twilio not configured');
+    return res.status(400).json({ success: false, error: 'Twilio not configured' });
+  }
+
+  // Get current status for the heartbeat message
+  const state = loadState();
+  const data = loadResults();
+  const resultCount = data
+    ? data.categories.halfMarathon.length + data.categories.tenKm.length
+    : 0;
+
+  const message = `💓 HopaChecker Heartbeat
+
+🔍 Status: ${state.lastStatus === 'up' ? '✅ UP' : '❌ DOWN'}
+📊 Results: ${resultCount > 0 ? `${resultCount} stored` : 'Not yet scraped'}
+⏰ Last check: ${state.lastChecked ? new Date(state.lastChecked).toLocaleString() : 'Never'}
+🔄 Monitoring every 5 minutes
+
+Still watching for results!`;
+
+  try {
+    await sendNotification({ twilio: twilioConfig, notifyWhatsapp }, message);
+    console.log('   ✅ Heartbeat sent');
+    return res.json({ success: true, timestamp: new Date().toISOString() });
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    console.error(`   ❌ Heartbeat failed: ${errorMessage}`);
+    return res.status(500).json({ success: false, error: errorMessage });
+  }
+});
+
 // Serve the main HTML page for all other routes
 app.get('*', (_req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));

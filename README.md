@@ -57,10 +57,10 @@ npm run search "John Smith"
    - **Cron Job** - Monitors every 5 min, auto-scrapes on recovery
    - **Persistent Disk** - Stores results across deploys
 6. Add environment variables in Render dashboard:
-   - `TWILIO_ACCOUNT_SID`
-   - `TWILIO_AUTH_TOKEN`
-   - `TWILIO_WHATSAPP_FROM`
-   - `NOTIFY_WHATSAPP`
+   - `TWILIO_ACCOUNT_SID` - Your Twilio Account SID
+   - `TWILIO_AUTH_TOKEN` - Your Twilio Auth Token
+   - `TWILIO_WHATSAPP_FROM` - Twilio WhatsApp number to send FROM (format: `whatsapp:+14155238886` for sandbox, or your approved Twilio WhatsApp number)
+   - `NOTIFY_WHATSAPP` - Your phone number to receive notifications TO (format: `+1234567890` or `whatsapp:+1234567890` - the `whatsapp:` prefix is added automatically if missing)
 
 Once deployed, share your Render URL with friends to search results!
 
@@ -70,7 +70,11 @@ Once deployed, share your Render URL with friends to search results!
 2. Go to **Messaging** > **Try it Out** > **Send a WhatsApp message**
 3. Follow instructions to connect your phone (send "join \<sandbox-code\>" to the Twilio number)
 4. Copy your Account SID and Auth Token from the console
-5. Add them to your `.env` file or Render environment variables
+5. Add them to your `.env` file or Render environment variables:
+   - `TWILIO_ACCOUNT_SID` - Your Account SID
+   - `TWILIO_AUTH_TOKEN` - Your Auth Token
+   - `TWILIO_WHATSAPP_FROM` - The Twilio WhatsApp number (usually `whatsapp:+14155238886` for sandbox, or your approved number in production)
+   - `NOTIFY_WHATSAPP` - Your phone number where you want to receive notifications (e.g., `+1234567890` - the `whatsapp:` prefix is optional)
 
 ## CLI Commands
 

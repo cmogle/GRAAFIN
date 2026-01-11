@@ -50,3 +50,22 @@ services:
           type: web
           name: hopachecker-web
           envVarKey: MONITOR_SECRET
+
+  # Hourly heartbeat - sends WhatsApp notification to confirm service is running
+  - type: cron
+    name: hopachecker-heartbeat
+    runtime: node
+    schedule: "0 * * * *"
+    buildCommand: echo "No build needed"
+    startCommand: |
+      curl -X POST "https://hopachecker-web.onrender.com/api/heartbeat?key=$MONITOR_SECRET" \
+        -H "Content-Type: application/json" \
+        --max-time 30 \
+        --retry 2 \
+        || echo "Heartbeat request failed"
+    envVars:
+      - key: MONITOR_SECRET
+        fromService:
+          type: web
+          name: hopachecker-web
+          envVarKey: MONITOR_SECRET
