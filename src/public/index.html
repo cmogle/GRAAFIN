@@ -142,8 +142,10 @@
       background: #fff;
       border-radius: 12px;
       padding: 16px;
-      margin-bottom: 16px;
+      margin-bottom: 0;
       box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+      border-bottom-left-radius: 0;
+      border-bottom-right-radius: 0;
     }
     .search-input {
       width: 100%;
@@ -175,6 +177,9 @@
       border-radius: 12px;
       box-shadow: 0 2px 8px rgba(0,0,0,0.1);
       overflow: hidden;
+      border-top-left-radius: 0;
+      border-top-right-radius: 0;
+      margin-top: 0;
     }
     .results-header {
       padding: 12px 16px;
@@ -453,6 +458,7 @@
       display: flex;
       align-items: center;
       gap: 8px;
+      margin-top: 16px;
       margin-bottom: 12px;
       padding: 8px 12px;
       background: #fff;
@@ -998,6 +1004,45 @@
     .trophy-gap-behind {
       color: #dc2626;
     }
+    .trophy-splits-section {
+      margin-top: 16px;
+      padding: 12px;
+      background: #fff;
+      border-radius: 10px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    }
+    .trophy-splits-title {
+      font-weight: 600;
+      color: #333;
+      font-size: 0.85rem;
+      text-transform: uppercase;
+      margin-bottom: 10px;
+      color: #64748b;
+    }
+    .trophy-splits-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+      gap: 10px;
+    }
+    .trophy-split-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 8px;
+      background: #f8f9fa;
+      border-radius: 6px;
+    }
+    .trophy-split-label {
+      font-size: 0.8rem;
+      color: #64748b;
+      font-weight: 600;
+    }
+    .trophy-split-value {
+      font-weight: 600;
+      font-family: monospace;
+      color: #1e40af;
+      font-size: 0.9rem;
+    }
 
     @media (max-width: 600px) {
       .trophy-case { padding: 14px; }
@@ -1448,6 +1493,10 @@
           <div class="athlete-card-time">${athlete.finishTime || '-'}</div>
           <div class="athlete-card-pace ${paceClass}">Pace: ${athlete.pace || '-'}</div>
           <div class="athlete-card-details">
+            ${athlete.time5km ? `<span class="athlete-card-detail"><strong>5km:</strong> ${athlete.time5km}</span>` : ''}
+            ${athlete.time10km ? `<span class="athlete-card-detail"><strong>10km:</strong> ${athlete.time10km}</span>` : ''}
+            ${currentRace === 'hm' && athlete.time13km ? `<span class="athlete-card-detail"><strong>13km:</strong> ${athlete.time13km}</span>` : ''}
+            ${currentRace === 'hm' && athlete.time15km ? `<span class="athlete-card-detail"><strong>15km:</strong> ${athlete.time15km}</span>` : ''}
             ${athlete.gender ? `<span class="athlete-card-detail"><strong>Gender:</strong> ${athlete.gender}${athlete.genderPosition ? ` (#${athlete.genderPosition})` : ''}</span>` : ''}
             ${athlete.category ? `<span class="athlete-card-detail"><strong>Category:</strong> ${athlete.category}${athlete.categoryPosition ? ` (#${athlete.categoryPosition})` : ''}</span>` : ''}
             ${athlete.country ? `<span class="athlete-card-detail"><strong>Country:</strong> ${athlete.country}</span>` : ''}
@@ -1567,6 +1616,18 @@
         </div>
 
         ${gapHtml}
+
+        ${athlete.time5km || athlete.time10km || (currentRace === 'hm' && (athlete.time13km || athlete.time15km)) ? `
+        <div class="trophy-splits-section">
+          <div class="trophy-splits-title">Split Times</div>
+          <div class="trophy-splits-grid">
+            ${athlete.time5km ? `<div class="trophy-split-item"><span class="trophy-split-label">5km:</span><span class="trophy-split-value">${athlete.time5km}</span></div>` : ''}
+            ${athlete.time10km ? `<div class="trophy-split-item"><span class="trophy-split-label">10km:</span><span class="trophy-split-value">${athlete.time10km}</span></div>` : ''}
+            ${currentRace === 'hm' && athlete.time13km ? `<div class="trophy-split-item"><span class="trophy-split-label">13km:</span><span class="trophy-split-value">${athlete.time13km}</span></div>` : ''}
+            ${currentRace === 'hm' && athlete.time15km ? `<div class="trophy-split-item"><span class="trophy-split-label">15km:</span><span class="trophy-split-value">${athlete.time15km}</span></div>` : ''}
+          </div>
+        </div>
+        ` : ''}
 
         <div class="trophy-share-section">
           <div class="share-buttons">
@@ -2361,13 +2422,6 @@
 
     function showInitialState() {
       const raceName = currentRace === 'hm' ? 'Half Marathon' : '10K';
-      
-      // Show top 3 performers if we have cached results
-      if (cachedResults && currentTimeFilter === null) {
-        showTopPerformers();
-        return;
-      }
-
       resultsContainer.innerHTML = `
         <div class="no-results">
           <div class="icon">${currentRace === 'hm' ? '🏃' : '🏃‍♀️'}</div>
@@ -2376,32 +2430,6 @@
       `;
       resultsCount.textContent = `${raceName} Results`;
       currentResults = [];
-    }
-
-    // Show top 3 performers for the current race
-    function showTopPerformers() {
-      if (!cachedResults) {
-        showInitialState();
-        return;
-      }
-
-      const raceResults = currentRace === 'hm'
-        ? cachedResults.categories.halfMarathon
-        : cachedResults.categories.tenKm;
-
-      if (raceResults.length === 0) {
-        showInitialState();
-        return;
-      }
-
-      // Get top 3 finishers
-      const top3 = raceResults.slice(0, 3);
-      currentResults = top3;
-      
-      const raceName = currentRace === 'hm' ? 'Half Marathon' : '10K';
-      resultsCount.textContent = `Top 3 ${raceName} Finishers`;
-
-      renderResults();
     }
 
     // Show skeleton loader
