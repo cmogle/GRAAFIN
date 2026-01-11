@@ -1387,11 +1387,23 @@
       try {
         const raceFilter = currentRace === 'hm' ? 'Half Marathon' : '10km';
         const res = await fetch(`/api/search?q=${encodeURIComponent(query)}&race=${encodeURIComponent(raceFilter)}&event=${currentEvent}`);
+        
+        if (!res.ok) {
+          throw new Error(`HTTP error! status: ${res.status}`);
+        }
+        
         const data = await res.json();
 
         if (data.error) {
           errorContainer.innerHTML = `<div class="error-msg">${data.error}</div>`;
-          resultsContainer.innerHTML = '<div class="no-results"><div class="icon">⏳</div><div>Results not yet available</div></div>';
+          if (currentMode === 'multi') {
+            const multiResultsContainer = document.getElementById('multi-results-container');
+            if (multiResultsContainer) {
+              multiResultsContainer.innerHTML = '<div class="no-results"><div class="icon">⏳</div><div>Results not yet available</div></div>';
+            }
+          } else {
+            resultsContainer.innerHTML = '<div class="no-results"><div class="icon">⏳</div><div>Results not yet available</div></div>';
+          }
           resultsCount.textContent = '0 results';
           currentResults = [];
           if (updateURL) updateURL();
@@ -1399,6 +1411,11 @@
         }
 
         errorContainer.innerHTML = '';
+
+        // Check if results array exists
+        if (!data.results || !Array.isArray(data.results)) {
+          throw new Error('Invalid response: results array missing');
+        }
 
         // Filter by race (server should already filter, but double-check)
         const filtered = data.results.filter(r =>
@@ -1438,7 +1455,16 @@
 
         if (updateURL) updateURL();
       } catch (e) {
-        resultsContainer.innerHTML = '<div class="no-results"><div class="icon">⚠️</div><div>Error searching. Please try again.</div></div>';
+        console.error('Search error:', e);
+        const errorMsg = e instanceof Error ? e.message : 'Unknown error';
+        if (currentMode === 'multi') {
+          const multiResultsContainer = document.getElementById('multi-results-container');
+          if (multiResultsContainer) {
+            multiResultsContainer.innerHTML = `<div class="no-results"><div class="icon">⚠️</div><div>Error searching. Please try again.</div></div>`;
+          }
+        } else {
+          resultsContainer.innerHTML = '<div class="no-results"><div class="icon">⚠️</div><div>Error searching. Please try again.</div></div>';
+        }
         resultsCount.textContent = 'Error';
         currentResults = [];
       }
