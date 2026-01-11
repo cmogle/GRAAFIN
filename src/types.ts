@@ -52,3 +52,6 @@ export interface Config {
   };
   notifyWhatsapp: string;
 }
+
+// Event identifier type
+export type EventId = 'dcs' | 'plus500';

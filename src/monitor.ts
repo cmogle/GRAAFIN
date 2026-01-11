@@ -1,16 +1,7 @@
 import axios from 'axios';
 import * as cheerio from 'cheerio';
-import * as fs from 'fs';
-import * as path from 'path';
-import { fileURLToPath } from 'url';
 import type { MonitorState, SiteStatus } from './types.js';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-
-// Use DATA_PATH env var for persistent storage (e.g., Render disk), fallback to local
-const DATA_DIR = process.env.DATA_PATH || path.join(__dirname, '..', 'data');
-const STATE_FILE = path.join(DATA_DIR, 'state.json');
+import { saveState as storageSaveState, loadState as storageLoadState } from './storage/index.js';
 
 // Extract the results API URL from the main page
 function extractResultsApiUrl(html: string): string | null {
@@ -124,16 +115,13 @@ export async function checkSiteStatus(url: string): Promise<SiteStatus> {
   }
 }
 
-export function loadState(): MonitorState {
-  try {
-    if (fs.existsSync(STATE_FILE)) {
-      const data = fs.readFileSync(STATE_FILE, 'utf-8');
-      return JSON.parse(data);
-    }
-  } catch {
-    // State file doesn't exist or is corrupted, use default
+export async function loadState(): Promise<MonitorState> {
+  const state = await storageLoadState();
+  if (state) {
+    return state;
   }
 
+  // Default state if not found
   return {
     lastStatus: 'unknown',
     lastChecked: new Date().toISOString(),
@@ -142,11 +130,8 @@ export function loadState(): MonitorState {
   };
 }
 
-export function saveState(state: MonitorState): void {
-  if (!fs.existsSync(DATA_DIR)) {
-    fs.mkdirSync(DATA_DIR, { recursive: true });
-  }
-  fs.writeFileSync(STATE_FILE, JSON.stringify(state, null, 2));
+export async function saveState(state: MonitorState): Promise<void> {
+  await storageSaveState(state);
 }
 
 export interface MonitorResult {
@@ -158,7 +143,7 @@ export interface MonitorResult {
 }
 
 export async function monitor(url: string): Promise<MonitorResult> {
-  const previousState = loadState();
+  const previousState = await loadState();
   const currentStatus = await checkSiteStatus(url);
 
   const currentStatusLabel = currentStatus.isUp ? 'up' : 'down';
@@ -175,7 +160,7 @@ export async function monitor(url: string): Promise<MonitorResult> {
     consecutiveFailures: currentStatus.isUp ? 0 : previousState.consecutiveFailures + 1,
   };
 
-  saveState(newState);
+  await saveState(newState);
 
   return {
     currentStatus,
