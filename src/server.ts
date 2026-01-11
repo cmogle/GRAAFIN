@@ -5,7 +5,7 @@ import * as dotenv from 'dotenv';
 import cors from 'cors';
 import rateLimit from 'express-rate-limit';
 import Fuse, { type IFuseOptions } from 'fuse.js';
-import { loadResults, getResultsFilePath, scrapeAllResults, saveResults } from './scraper.js';
+import { loadResults, getResultsFilePath, scrapeAllResults, scrapePlus500Results, saveResults, type EventId } from './scraper.js';
 import { loadState, monitor, formatStatusMessage } from './monitor.js';
 import { sendNotification, isTwilioConfigured } from './notifications/index.js';
 import type { RaceResult } from './types.js';
@@ -44,6 +44,15 @@ const FUSE_OPTIONS: IFuseOptions<RaceResult & { race: string }> = {
   minMatchCharLength: 2,
 };
 
+// Helper function to parse event ID from query parameter
+function getEventId(req: express.Request): EventId {
+  const eventParam = (req.query.event as string || '').toLowerCase();
+  if (eventParam === 'plus500') {
+    return 'plus500';
+  }
+  return 'dcs'; // Default to 'dcs'
+}
+
 // CORS middleware
 app.use(cors({
   origin: process.env.CORS_ORIGIN || '*',
@@ -57,9 +66,10 @@ app.use(express.static(path.join(__dirname, 'public')));
 app.use('/api/', apiLimiter);
 
 // API: Get current status
-app.get('/api/status', (_req, res) => {
+app.get('/api/status', (req, res) => {
   const state = loadState();
-  const data = loadResults();
+  const eventId = getEventId(req);
+  const data = loadResults(eventId);
 
   res.json({
     monitor: state,
@@ -69,6 +79,7 @@ app.get('/api/status', (_req, res) => {
       : 0,
     scrapedAt: data?.scrapedAt || null,
     eventName: data?.eventName || null,
+    eventId,
   });
 });
 
@@ -89,7 +100,8 @@ app.get('/api/search', searchLimiter, (req, res) => {
     return res.json({ query: '', results: [], total: 0, limit: 20 });
   }
 
-  const data = loadResults();
+  const eventId = getEventId(req);
+  const data = loadResults(eventId);
   if (!data) {
     return res.json({
       query,
@@ -141,7 +153,8 @@ app.get('/api/search', searchLimiter, (req, res) => {
 
 // API: Download results as JSON
 app.get('/api/download/json', (req, res) => {
-  const data = loadResults();
+  const eventId = getEventId(req);
+  const data = loadResults(eventId);
   if (!data) {
     return res.status(404).json({ error: 'No results available' });
   }
@@ -152,20 +165,21 @@ app.get('/api/download/json', (req, res) => {
                      raceParam === 'half marathon' || raceParam === 'half' ? 'halfMarathon' : 'all';
 
   let resultsToExport;
-  let filename = 'dcs-results.json';
+  const eventPrefix = eventId === 'plus500' ? 'plus500' : 'dcs';
+  let filename = `${eventPrefix}-results.json`;
 
   if (raceFilter === 'halfMarathon') {
     resultsToExport = {
       ...data,
       categories: { halfMarathon: data.categories.halfMarathon, tenKm: [] },
     };
-    filename = 'dcs-half-marathon-results.json';
+    filename = `${eventPrefix}-half-marathon-results.json`;
   } else if (raceFilter === 'tenKm') {
     resultsToExport = {
       ...data,
       categories: { halfMarathon: [], tenKm: data.categories.tenKm },
     };
-    filename = 'dcs-10km-results.json';
+    filename = `${eventPrefix}-10km-results.json`;
   } else {
     resultsToExport = data;
   }
@@ -177,7 +191,8 @@ app.get('/api/download/json', (req, res) => {
 
 // API: Download results as CSV
 app.get('/api/download/csv', (req, res) => {
-  const data = loadResults();
+  const eventId = getEventId(req);
+  const data = loadResults(eventId);
   if (!data) {
     return res.status(404).json({ error: 'No results available' });
   }
@@ -188,14 +203,15 @@ app.get('/api/download/csv', (req, res) => {
                      raceParam === 'half marathon' || raceParam === 'half' ? 'halfMarathon' : 'all';
 
   let allResults: (RaceResult & { race: string })[] = [];
-  let filename = 'dcs-results.csv';
+  const eventPrefix = eventId === 'plus500' ? 'plus500' : 'dcs';
+  let filename = `${eventPrefix}-results.csv`;
 
   if (raceFilter === 'halfMarathon') {
     allResults = data.categories.halfMarathon.map(r => ({ ...r, race: 'Half Marathon' }));
-    filename = 'dcs-half-marathon-results.csv';
+    filename = `${eventPrefix}-half-marathon-results.csv`;
   } else if (raceFilter === 'tenKm') {
     allResults = data.categories.tenKm.map(r => ({ ...r, race: '10km' }));
-    filename = 'dcs-10km-results.csv';
+    filename = `${eventPrefix}-10km-results.csv`;
   } else {
     allResults = [
       ...data.categories.halfMarathon.map(r => ({ ...r, race: 'Half Marathon' })),
@@ -223,8 +239,9 @@ app.get('/api/download/csv', (req, res) => {
 });
 
 // API: Get all results (for bulk access)
-app.get('/api/results', (_req, res) => {
-  const data = loadResults();
+app.get('/api/results', (req, res) => {
+  const eventId = getEventId(req);
+  const data = loadResults(eventId);
   if (!data) {
     return res.status(404).json({ error: 'No results available' });
   }
@@ -374,5 +391,5 @@ app.get('*', (_req, res) => {
 
 app.listen(PORT, () => {
   console.log(`🏃 HopaChecker server running at http://localhost:${PORT}`);
-  console.log(`📁 Results file: ${getResultsFilePath()}`);
+  console.log(`📁 Results files: ${getResultsFilePath('dcs')}, ${getResultsFilePath('plus500')}`);
 });

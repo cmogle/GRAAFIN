@@ -12,6 +12,16 @@ const __dirname = path.dirname(__filename);
 const DATA_DIR = process.env.DATA_PATH || path.join(__dirname, '..', 'data');
 const RESULTS_FILE = path.join(DATA_DIR, 'results.json');
 
+// Event identifiers
+export type EventId = 'dcs' | 'plus500';
+
+export function getResultsFilePath(eventId: EventId = 'dcs'): string {
+  if (eventId === 'plus500') {
+    return path.join(DATA_DIR, 'results-plus500.json');
+  }
+  return RESULTS_FILE; // Default to 'dcs'
+}
+
 // Hopasports API configuration - extracted from the page HTML
 interface RaceConfig {
   id: string;
@@ -269,30 +279,80 @@ export async function scrapeAllResults(url: string): Promise<RaceData> {
   return raceData;
 }
 
-export function saveResults(data: RaceData): void {
+export async function scrapePlus500Results(url: string = 'https://results.hopasports.com/event/plus500-city-half-marathon-dubai-2025'): Promise<RaceData> {
+  console.log(`Fetching page: ${url}`);
+  const html = await fetchPage(url);
+
+  const apiConfig = extractResultsApiUrl(html);
+
+  const halfMarathon: RaceResult[] = [];
+  const tenKm: RaceResult[] = [];
+
+  if (apiConfig && apiConfig.races.length > 0) {
+    console.log(`Found ${apiConfig.races.length} race(s) configured`);
+
+    for (const race of apiConfig.races) {
+      // Only fetch 21KM/Half Marathon races for Plus500 event
+      const title = race.title.toLowerCase();
+      const is21km = title.includes('21') || title.includes('half') || title.includes('21k') || title.includes('21km');
+      
+      if (!is21km) {
+        console.log(`  Skipping ${race.title} (only fetching 21KM for Plus500 event)`);
+        continue;
+      }
+
+      console.log(`Fetching results for: ${race.title}`);
+      try {
+        const results = await fetchResultsFromApi(apiConfig.baseUrl, race.race_id, race.pt);
+        console.log(`  Found ${results.length} results`);
+        halfMarathon.push(...results);
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+        console.log(`  Error fetching ${race.title}: ${errorMessage}`);
+      }
+    }
+  } else {
+    console.log('No API configuration found, trying HTML parsing...');
+    const results = parseHtmlResults(html);
+    halfMarathon.push(...results);
+  }
+
+  const raceData: RaceData = {
+    eventName: 'Plus500 City Half Marathon Dubai 2025',
+    eventDate: '2025-11-16',
+    url,
+    scrapedAt: new Date().toISOString(),
+    categories: {
+      halfMarathon,
+      tenKm, // Empty for Plus500
+    },
+  };
+
+  return raceData;
+}
+
+export function saveResults(data: RaceData, eventId: EventId = 'dcs'): void {
   if (!fs.existsSync(DATA_DIR)) {
     fs.mkdirSync(DATA_DIR, { recursive: true });
   }
-  fs.writeFileSync(RESULTS_FILE, JSON.stringify(data, null, 2));
-  console.log(`Results saved to: ${RESULTS_FILE}`);
+  const filePath = getResultsFilePath(eventId);
+  fs.writeFileSync(filePath, JSON.stringify(data, null, 2));
+  console.log(`Results saved to: ${filePath}`);
 }
 
 export function getDataDir(): string {
   return DATA_DIR;
 }
 
-export function loadResults(): RaceData | null {
+export function loadResults(eventId: EventId = 'dcs'): RaceData | null {
   try {
-    if (fs.existsSync(RESULTS_FILE)) {
-      const data = fs.readFileSync(RESULTS_FILE, 'utf-8');
+    const filePath = getResultsFilePath(eventId);
+    if (fs.existsSync(filePath)) {
+      const data = fs.readFileSync(filePath, 'utf-8');
       return JSON.parse(data);
     }
   } catch {
     // File doesn't exist or is corrupted
   }
   return null;
-}
-
-export function getResultsFilePath(): string {
-  return RESULTS_FILE;
 }

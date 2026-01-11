@@ -178,7 +178,7 @@ program
       console.log(`\n✅ Scraping complete!`);
       console.log(`   Half Marathon: ${data.categories.halfMarathon.length} results`);
       console.log(`   10km: ${data.categories.tenKm.length} results`);
-      console.log(`   Saved to: ${getResultsFilePath()}`);
+      console.log(`   Saved to: ${getResultsFilePath('dcs')}`);
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       console.error(`\n❌ Scraping failed: ${errorMessage}`);

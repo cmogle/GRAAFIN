@@ -35,6 +35,35 @@
       font-size: 0.9rem;
     }
 
+    /* Event selector tabs */
+    .event-tabs {
+      display: flex;
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+    .event-tab {
+      flex: 1;
+      padding: 14px 16px;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 0.95rem;
+      font-weight: 600;
+      transition: all 0.2s;
+      text-align: center;
+      background: #fff;
+      color: #666;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    }
+    .event-tab:hover {
+      background: #f8f9fa;
+    }
+    .event-tab.active {
+      background: #0986e6;
+      color: #fff;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.15);
+    }
+
     /* Race selector tabs */
     .race-tabs {
       display: flex;
@@ -340,17 +369,26 @@
 <body>
   <div class="container">
     <header>
-      <h1>Dubai Creek Striders</h1>
-      <p class="subtitle">January 11, 2026 - Official Results</p>
+      <h1 id="event-title">Dubai Creek Striders</h1>
+      <p class="subtitle" id="event-subtitle">January 11, 2026 - Official Results</p>
     </header>
 
-    <div class="race-tabs">
+    <div class="event-tabs">
+      <button class="event-tab active" data-event="dcs" onclick="selectEvent('dcs')">
+        Dubai Creek Striders
+      </button>
+      <button class="event-tab" data-event="plus500" onclick="selectEvent('plus500')">
+        Plus500 City Half Marathon
+      </button>
+    </div>
+
+    <div class="race-tabs" id="race-tabs">
       <button class="race-tab hm active" data-race="hm" onclick="selectRace('hm')">
         <span class="race-icon">🏃</span>
         <span class="race-name">Half Marathon</span>
         <span class="race-count" id="hm-count">-- finishers</span>
       </button>
-      <button class="race-tab tenk" data-race="tenk" onclick="selectRace('tenk')">
+      <button class="race-tab tenk" data-race="tenk" onclick="selectRace('tenk')" id="tenk-tab">
         <span class="race-icon">🏃‍♀️</span>
         <span class="race-name">10K</span>
         <span class="race-count" id="tenk-count">-- finishers</span>
@@ -404,17 +442,92 @@
     const jsonDownload = document.getElementById('json-download');
 
     let debounceTimer;
+    let currentEvent = 'dcs';
     let currentRace = 'hm';
     let cachedResults = null;
     let currentResults = [];
     let currentSort = { column: null, direction: 'asc' };
     let searchQuery = '';
 
+    // Event configuration
+    const eventConfig = {
+      dcs: {
+        title: 'Dubai Creek Striders',
+        subtitle: 'January 11, 2026 - Official Results',
+        hasTenK: true,
+      },
+      plus500: {
+        title: 'Plus500 City Half Marathon',
+        subtitle: 'November 16, 2025 - Official Results',
+        hasTenK: false,
+      },
+    };
+
+    // Select event
+    function selectEvent(event, updateURL = true) {
+      currentEvent = event;
+      
+      // Update event tab styles
+      document.querySelectorAll('.event-tab').forEach(tab => {
+        tab.classList.remove('active');
+      });
+      document.querySelector(`.event-tab[data-event="${event}"]`).classList.add('active');
+
+      // Update header
+      const config = eventConfig[event];
+      document.getElementById('event-title').textContent = config.title;
+      document.getElementById('event-subtitle').textContent = config.subtitle;
+
+      // Show/hide 10K tab based on event
+      const tenkTab = document.getElementById('tenk-tab');
+      if (config.hasTenK) {
+        tenkTab.style.display = '';
+      } else {
+        tenkTab.style.display = 'none';
+        // If 10K was selected, switch to HM
+        if (currentRace === 'tenk') {
+          currentRace = 'hm';
+        }
+      }
+
+      // Update race tabs
+      document.querySelectorAll('.race-tab').forEach(tab => {
+        tab.classList.remove('active');
+      });
+      const activeRaceTab = document.querySelector(`.race-tab.${currentRace}`);
+      if (activeRaceTab) {
+        activeRaceTab.classList.add('active');
+      }
+
+      // Clear cached results and reload
+      cachedResults = null;
+      loadResultCounts();
+      loadStatus();
+
+      // Update download links
+      updateDownloadLinks();
+
+      // Re-run search if there's a query
+      if (searchInput.value.trim()) {
+        doSearch(searchInput.value, updateURL);
+      } else {
+        showInitialState();
+        if (updateURL) updateURL();
+      }
+    }
+
     // Load state from URL on page load
     function loadStateFromURL() {
       const params = new URLSearchParams(window.location.search);
+      const event = params.get('event');
       const race = params.get('race');
       const query = params.get('q');
+      
+      if (event === 'plus500') {
+        selectEvent('plus500', false);
+      } else {
+        selectEvent('dcs', false);
+      }
       
       if (race === 'tenk' || race === '10k') {
         currentRace = 'tenk';
@@ -434,6 +547,9 @@
     // Update URL with current state
     function updateURL() {
       const params = new URLSearchParams();
+      if (currentEvent !== 'dcs') {
+        params.set('event', currentEvent);
+      }
       if (currentRace) {
         params.set('race', currentRace === 'hm' ? 'hm' : 'tenk');
       }
@@ -447,8 +563,9 @@
     // Update download links with race filter
     function updateDownloadLinks() {
       const raceParam = currentRace === 'hm' ? 'half' : '10k';
-      csvDownload.href = `/api/download/csv?race=${raceParam}`;
-      jsonDownload.href = `/api/download/json?race=${raceParam}`;
+      const eventParam = currentEvent === 'dcs' ? '' : `&event=${currentEvent}`;
+      csvDownload.href = `/api/download/csv?race=${raceParam}${eventParam}`;
+      jsonDownload.href = `/api/download/json?race=${raceParam}${eventParam}`;
     }
 
     function selectRace(race, updateURL = true) {
@@ -509,7 +626,7 @@
     // Fetch and display status
     async function loadStatus() {
       try {
-        const res = await fetch('/api/status');
+        const res = await fetch(`/api/status?event=${currentEvent}`);
         const data = await res.json();
 
         const statusClass = data.monitor.lastStatus === 'up' ? 'up' :
@@ -539,7 +656,7 @@
 
     async function loadResultCounts() {
       try {
-        const res = await fetch('/api/results');
+        const res = await fetch(`/api/results?event=${currentEvent}`);
         if (res.ok) {
           cachedResults = await res.json();
           const hmCount = cachedResults.categories.halfMarathon.length;
@@ -640,7 +757,7 @@
 
       try {
         const raceFilter = currentRace === 'hm' ? 'Half Marathon' : '10km';
-        const res = await fetch(`/api/search?q=${encodeURIComponent(query)}&race=${encodeURIComponent(raceFilter)}`);
+        const res = await fetch(`/api/search?q=${encodeURIComponent(query)}&race=${encodeURIComponent(raceFilter)}&event=${currentEvent}`);
         const data = await res.json();
 
         if (data.error) {
@@ -725,8 +842,8 @@
 
     // Initial load
     loadStateFromURL();
+    // loadStatus is called by selectEvent, but we call it here too for initial load
     loadStatus();
-    updateDownloadLinks();
 
     // Refresh status periodically
     setInterval(loadStatus, 60000);
