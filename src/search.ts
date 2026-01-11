@@ -1,6 +1,5 @@
 import Fuse, { type IFuseOptions } from 'fuse.js';
 import type { RaceResult, RaceData, SearchResult } from './types.js';
-import { loadResults } from './scraper.js';
 
 const FUSE_OPTIONS: IFuseOptions<RaceResult> = {
   keys: ['name'],
@@ -116,7 +115,8 @@ export function formatSearchResults(results: SearchResult[], query: string): str
 }
 
 export async function searchFromFile(names: string[]): Promise<void> {
-  const data = loadResults();
+  const { loadResults } = await import('./scraper.js');
+  const data: RaceData | null = await loadResults('dcs');
 
   if (!data) {
     console.log('❌ No results data found. Run "npm run scrape" first to fetch results.');

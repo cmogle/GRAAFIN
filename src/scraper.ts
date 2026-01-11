@@ -1,6 +1,7 @@
 import axios from 'axios';
 import * as cheerio from 'cheerio';
-import type { RaceResult, RaceData, EventId } from './types.js';
+import type { RaceResult, RaceData } from './types.js';
+import type { EventId } from './types.js';
 import { saveResults as storageSaveResults, loadResults as storageLoadResults, getStorageInfo } from './storage/index.js';
 
 // Re-export EventId type for backwards compatibility
