@@ -787,7 +787,7 @@
         doSearch(searchInput.value, updateURL);
       } else {
         showInitialState();
-        if (updateURL) updateURL();
+        if (updateURL) updateURLFunc();
       }
     }
 
@@ -839,7 +839,7 @@
     }
 
     // Update URL with current state
-    function updateURL() {
+    function updateURLFunc() {
       const params = new URLSearchParams();
       if (currentEvent !== 'dcs') {
         params.set('event', currentEvent);
@@ -908,7 +908,7 @@
         doSearch(searchInput.value, updateURL);
       } else {
         showInitialState();
-        if (updateURL) updateURL();
+        if (updateURL) updateURLFunc();
       }
     }
 
@@ -953,7 +953,7 @@
         }
       }
       
-      if (updateURL) updateURL();
+      if (updateURL) updateURLFunc();
     };
 
     // Add athlete to selection
@@ -976,7 +976,7 @@
         renderSelectedAthletes();
         renderRankingTable();
         renderMultiModeResults();
-        updateURL();
+        updateURLFunc();
       }
     }
 
@@ -988,7 +988,7 @@
       renderSelectedAthletes();
       renderRankingTable();
       renderMultiModeResults();
-      updateURL();
+      updateURLFunc();
     };
 
     // Clear all selected athletes (global for onclick handlers)
@@ -997,7 +997,7 @@
       renderSelectedAthletes();
       renderRankingTable();
       renderMultiModeResults();
-      updateURL();
+      updateURLFunc();
     };
 
 
@@ -1377,7 +1377,7 @@
       if (!query.trim()) {
         showInitialState();
         searchQuery = '';
-        if (updateURL) updateURL();
+        if (updateURL) updateURLFunc();
         return;
       }
 
@@ -1406,7 +1406,7 @@
           }
           resultsCount.textContent = '0 results';
           currentResults = [];
-          if (updateURL) updateURL();
+          if (updateURL) updateURLFunc();
           return;
         }
 
@@ -1432,7 +1432,7 @@
           resultsContainer.innerHTML = `<div class="no-results"><div class="icon">🔍</div><div>No ${raceName} matches for "${escapeHtml(query)}"</div>${suggestion}</div>`;
           resultsCount.textContent = '0 results';
           currentResults = [];
-          if (updateURL) updateURL();
+          if (updateURL) updateURLFunc();
           return;
         }
 
@@ -1453,7 +1453,7 @@
           }
         }
 
-        if (updateURL) updateURL();
+        if (updateURL) updateURLFunc();
       } catch (e) {
         console.error('Search error:', e);
         const errorMsg = e instanceof Error ? e.message : 'Unknown error';
@@ -1496,7 +1496,7 @@
         searchInput.value = '';
         searchInput.blur();
         showInitialState();
-        updateURL();
+        updateURLFunc();
       }
     });
 
