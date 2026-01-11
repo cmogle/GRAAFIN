@@ -160,6 +160,14 @@ app.get('/api/search', searchLimiter, async (req, res) => {
     race: match.item.race,
     gender: match.item.gender,
     category: match.item.category,
+    country: match.item.country,
+    time5km: match.item.time5km,
+    time10km: match.item.time10km,
+    time13km: match.item.time13km,
+    time15km: match.item.time15km,
+    pace: match.item.pace,
+    genderPosition: match.item.genderPosition,
+    categoryPosition: match.item.categoryPosition,
     confidence: Math.round((1 - (match.score ?? 0)) * 100),
   }));
 
