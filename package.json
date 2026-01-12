@@ -14,7 +14,8 @@
     "scrape": "tsx src/index.ts scrape",
     "search": "tsx src/index.ts search",
     "status": "tsx src/index.ts status",
-    "sync": "tsx src/index.ts sync"
+    "sync": "tsx src/index.ts sync",
+    "scrape-race": "node scripts/scrape-races.js"
   },
   "keywords": [
     "marathon",
