@@ -18,21 +18,10 @@ function initApp() {
   // Initialize search
   initSearch();
   
-  // Initialize auth
+  // Initialize auth first
   initAuth();
   
-  // Check if we're returning from OAuth and need to show admin page
-  // Wait a bit for auth to initialize
-  setTimeout(() => {
-    const hash = window.location.hash;
-    const path = window.location.pathname;
-    const normalizedPath = path.replace(/\/$/, '') || '/';
-    const pendingAdminAccess = sessionStorage.getItem('pendingAdminAccess');
-    
-    if ((hash === '#/admin' || normalizedPath === '/admin' || pendingAdminAccess === 'true') && isAuthenticated()) {
-      showAdminPage();
-    }
-  }, 500);
+  // Note: Routing will be handled by setupRouting() which waits for auth
   
   // Load featured content
   loadFeaturedContent();
@@ -81,14 +70,17 @@ function setupRouting() {
   // Handle popstate (browser back/forward)
   window.addEventListener('popstate', handleRoute);
   
-  // Handle initial route
-  handleRoute();
+  // Wait for auth to initialize before handling initial route
+  // This ensures we can check authentication state properly
+  setTimeout(() => {
+    handleRoute();
+  }, 300);
 }
 
 /**
  * Handle route changes
  */
-function handleRoute() {
+async function handleRoute() {
   const hash = window.location.hash;
   const path = window.location.pathname;
   
@@ -101,9 +93,13 @@ function handleRoute() {
       showAthleteProfile(athleteId);
     }
   } else if (hash === '#/admin' || normalizedPath === '/admin') {
-    showAdminPage();
+    // Don't redirect away - show admin page (it will handle auth check)
+    await showAdminPage();
   } else {
-    showLanding();
+    // Only show landing if we're not trying to access admin
+    if (normalizedPath !== '/admin' && hash !== '#/admin') {
+      showLanding();
+    }
   }
 }
 
@@ -111,7 +107,12 @@ function handleRoute() {
  * Show landing page
  */
 export function showLanding() {
-  window.location.hash = '';
+  // Only clear hash if we're not on admin route
+  const path = window.location.pathname;
+  const normalizedPath = path.replace(/\/$/, '') || '/';
+  if (normalizedPath !== '/admin') {
+    window.location.hash = '';
+  }
   
   const hero = document.getElementById('hero');
   const searchSection = document.getElementById('search');
@@ -134,12 +135,57 @@ export function showLanding() {
  */
 export async function showAdminPage() {
   // Set hash first so OAuth can redirect back to it
-  window.location.hash = '#/admin';
+  const path = window.location.pathname;
+  const normalizedPath = path.replace(/\/$/, '') || '/';
   
-  // Check authentication first
+  // Set hash if using path-based routing
+  if (normalizedPath === '/admin') {
+    window.location.hash = '#/admin';
+  }
+  
+  // Wait a moment for auth to potentially initialize
+  // Check if we have a session that hasn't been loaded yet
+  const { getSupabaseClient } = await import('./auth.js');
+  const supabaseClient = getSupabaseClient();
+  
+  if (supabaseClient) {
+    // Try to get session if not already loaded
+    try {
+      const { data: { session } } = await supabaseClient.auth.getSession();
+      if (session && !isAuthenticated()) {
+        // Session exists but currentUser not set - update it
+        const { getCurrentUser, isAuthenticated: checkAuth } = await import('./auth.js');
+        // This will be handled by the auth state change listener, but we can trigger it
+        const { handleAuthStateChange } = await import('./auth.js');
+        // Actually, we can't import that - it's not exported. Let's just wait for it
+      }
+    } catch (error) {
+      console.error('Error checking session:', error);
+    }
+  }
+  
+  // Small delay to let auth state settle
+  await new Promise(resolve => setTimeout(resolve, 100));
+  
+  // Check authentication
   if (!isAuthenticated()) {
     // Store that we're trying to access admin
     sessionStorage.setItem('pendingAdminAccess', 'true');
+    
+    // Hide all sections first
+    const hero = document.getElementById('hero');
+    const searchSection = document.getElementById('search');
+    const featuresSection = document.getElementById('features');
+    const profileSection = document.getElementById('profile-section');
+    const adminSection = document.getElementById('admin-section');
+    
+    if (hero) hero.classList.add('hidden');
+    if (searchSection) searchSection.classList.add('hidden');
+    if (featuresSection) featuresSection.classList.add('hidden');
+    if (profileSection) profileSection.classList.add('hidden');
+    if (adminSection) adminSection.classList.add('hidden');
+    
+    // Show auth modal
     showAuthModal();
     return;
   }

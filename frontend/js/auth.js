@@ -31,6 +31,15 @@ export function initAuth() {
         if (session) {
           currentUser = session.user;
           updateAuthUI(session.user);
+          
+          // If we're on /admin and just got authenticated, show admin page
+          const path = window.location.pathname;
+          const hash = window.location.hash;
+          if ((path === '/admin' || hash === '#/admin') && window.showAdminPage) {
+            setTimeout(() => {
+              window.showAdminPage();
+            }, 100);
+          }
         }
       });
     } else {
