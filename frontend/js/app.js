@@ -73,12 +73,15 @@ function setupRouting() {
  */
 function handleRoute() {
   const hash = window.location.hash;
+  const path = window.location.pathname;
   
   if (hash.startsWith('#/athlete/')) {
     const athleteId = hash.replace('#/athlete/', '');
     if (athleteId) {
       showAthleteProfile(athleteId);
     }
+  } else if (hash === '#/admin' || path === '/admin' || path.endsWith('/admin')) {
+    showAdminPage();
   } else {
     showLanding();
   }
@@ -94,11 +97,55 @@ export function showLanding() {
   const searchSection = document.getElementById('search');
   const featuresSection = document.getElementById('features');
   const profileSection = document.getElementById('profile-section');
+  const adminSection = document.getElementById('admin-section');
   
   if (hero) hero.classList.remove('hidden');
   if (searchSection) searchSection.classList.remove('hidden');
   if (featuresSection) featuresSection.classList.remove('hidden');
   if (profileSection) profileSection.classList.add('hidden');
+  if (adminSection) adminSection.classList.add('hidden');
+  
+  // Scroll to top
+  scrollToTop();
+}
+
+/**
+ * Show admin page
+ */
+export async function showAdminPage() {
+  // Check authentication first
+  if (!isAuthenticated()) {
+    showAuthModal();
+    return;
+  }
+
+  // Verify admin access
+  const { verifyAdminAccess } = await import('./admin.js');
+  const hasAccess = await verifyAdminAccess();
+  
+  if (!hasAccess) {
+    alert('Access denied. Admin privileges required.');
+    showLanding();
+    return;
+  }
+
+  window.location.hash = '#/admin';
+  
+  const hero = document.getElementById('hero');
+  const searchSection = document.getElementById('search');
+  const featuresSection = document.getElementById('features');
+  const profileSection = document.getElementById('profile-section');
+  const adminSection = document.getElementById('admin-section');
+  
+  if (hero) hero.classList.add('hidden');
+  if (searchSection) searchSection.classList.add('hidden');
+  if (featuresSection) featuresSection.classList.add('hidden');
+  if (profileSection) profileSection.classList.add('hidden');
+  if (adminSection) adminSection.classList.remove('hidden');
+  
+  // Initialize admin page
+  const { initAdminPage } = await import('./admin.js');
+  initAdminPage();
   
   // Scroll to top
   scrollToTop();
@@ -516,6 +563,7 @@ window.scrollToTop = scrollToTop;
 window.showLanding = showLanding;
 window.navigateToProfile = navigateToProfile;
 window.showMyProfile = showMyProfile;
+window.showAdminPage = showAdminPage;
 window.toggleMobileMenu = toggleMobileMenu;
 
 // Initialize app when DOM is ready

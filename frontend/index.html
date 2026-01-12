@@ -208,6 +208,100 @@
     </div>
   </div>
 
+  <!-- Admin Page (Hidden by default) -->
+  <section class="admin-section hidden" id="admin-section">
+    <div class="container">
+      <div class="admin-header">
+        <button class="btn-back" onclick="showLanding()">
+          <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+            <path d="M12.5 15L7.5 10L12.5 5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+          </svg>
+          Back to Home
+        </button>
+        <h1 class="admin-title">Admin Dashboard</h1>
+      </div>
+
+      <!-- New Scrape Form -->
+      <div class="admin-card">
+        <h2>Scrape New Race</h2>
+        <div class="admin-form">
+          <div class="form-group">
+            <label for="scrape-url">Event URL:</label>
+            <input type="text" id="scrape-url" class="form-input" placeholder="https://results.hopasports.com/event/...">
+          </div>
+          <div class="form-group">
+            <label for="scrape-organiser">Organiser (optional):</label>
+            <input type="text" id="scrape-organiser" class="form-input" placeholder="hopasports, evochip, etc.">
+          </div>
+          <div class="form-actions">
+            <button class="btn-secondary" onclick="checkDuplicate()">Check for Duplicates</button>
+            <button class="btn-primary" onclick="startScrape()">Start Scrape</button>
+          </div>
+          <div id="scrape-status" class="status-message"></div>
+        </div>
+      </div>
+
+      <!-- Race Summary -->
+      <div class="admin-card">
+        <div class="card-header">
+          <h2>Scraped Races</h2>
+          <button class="btn-secondary" onclick="loadEventsSummary()">Refresh</button>
+        </div>
+        <div class="table-container">
+          <table class="admin-table" id="events-table">
+            <thead>
+              <tr>
+                <th>Event Name</th>
+                <th>Date</th>
+                <th>Organiser</th>
+                <th>Results</th>
+                <th>Last Scrape</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="events-tbody">
+              <tr>
+                <td colspan="6" class="loading-cell">Loading events...</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Failed Jobs Queue -->
+      <div class="admin-card">
+        <div class="card-header">
+          <h2>Failed Scrape Jobs</h2>
+          <button class="btn-secondary" onclick="loadFailedJobs()">Refresh</button>
+        </div>
+        <div id="failed-jobs-list" class="failed-jobs-list">
+          <div class="loading-cell">Loading failed jobs...</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Event Details Modal -->
+  <div class="modal-overlay hidden" id="event-details-modal" onclick="closeEventDetailsModal(event)">
+    <div class="modal-content modal-large" onclick="event.stopPropagation()">
+      <button class="modal-close" onclick="closeEventDetailsModal()">×</button>
+      <div id="event-details-content"></div>
+    </div>
+  </div>
+
+  <!-- Duplicate Confirmation Modal -->
+  <div class="modal-overlay hidden" id="duplicate-modal" onclick="closeDuplicateModal(event)">
+    <div class="modal-content" onclick="event.stopPropagation()">
+      <button class="modal-close" onclick="closeDuplicateModal()">×</button>
+      <h2 class="modal-title">Duplicate Event Found</h2>
+      <div id="duplicate-content"></div>
+      <div class="modal-actions">
+        <button class="btn-secondary" onclick="closeDuplicateModal()">Cancel</button>
+        <button class="btn-primary" onclick="confirmOverwrite()">Overwrite & Continue</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Loading Overlay -->
   <div class="loading-overlay hidden" id="loading-overlay">
     <div class="spinner-large"></div>

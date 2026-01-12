@@ -62,6 +62,7 @@ function updateAuthUI(user) {
   const signinBtn = document.getElementById('signin-btn');
   const userMenu = document.getElementById('user-menu');
   const userName = document.getElementById('user-name');
+  const userDropdown = document.getElementById('user-dropdown');
 
   if (user) {
     // User is signed in
@@ -75,10 +76,51 @@ function updateAuthUI(user) {
                    'User';
       userName.textContent = name;
     }
+    
+    // Add admin link if user is admin
+    if (userDropdown && user.email === 'conorogle@gmail.com') {
+      // Check if admin link already exists
+      let adminLink = userDropdown.querySelector('.admin-link');
+      if (!adminLink) {
+        adminLink = document.createElement('a');
+        adminLink.href = '#';
+        adminLink.className = 'admin-link';
+        adminLink.textContent = 'Admin';
+        adminLink.onclick = (e) => {
+          e.preventDefault();
+          if (window.showAdminPage) {
+            window.showAdminPage();
+          } else {
+            window.location.hash = '#/admin';
+          }
+          return false;
+        };
+        // Insert before "Sign Out"
+        const signOutLink = userDropdown.querySelector('a[onclick*="signOut"]');
+        if (signOutLink) {
+          userDropdown.insertBefore(adminLink, signOutLink);
+        } else {
+          userDropdown.appendChild(adminLink);
+        }
+      }
+    } else if (userDropdown) {
+      // Remove admin link if not admin
+      const adminLink = userDropdown.querySelector('.admin-link');
+      if (adminLink) {
+        adminLink.remove();
+      }
+    }
   } else {
     // User is not signed in
     if (signinBtn) signinBtn.classList.remove('hidden');
     if (userMenu) userMenu.classList.add('hidden');
+    // Remove admin link
+    if (userDropdown) {
+      const adminLink = userDropdown.querySelector('.admin-link');
+      if (adminLink) {
+        adminLink.remove();
+      }
+    }
   }
 }
 

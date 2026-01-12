@@ -482,7 +482,41 @@ Still watching for results!`;
 // NEW ATHLETE PLATFORM API ENDPOINTS
 // ============================================================================
 
-// Simple auth middleware for admin endpoints
+// Admin auth middleware that verifies JWT token and checks email
+async function requireAdminAuth(req: express.Request, res: express.Response, next: express.NextFunction) {
+  try {
+    // Extract JWT token from Authorization header
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return res.status(401).json({ error: 'Unauthorized - No token provided' });
+    }
+
+    const token = authHeader.substring(7); // Remove 'Bearer ' prefix
+
+    // Verify token with Supabase
+    const { supabase } = await import('./db/supabase.js');
+    const { data: { user }, error } = await supabase.auth.getUser(token);
+
+    if (error || !user) {
+      return res.status(401).json({ error: 'Unauthorized - Invalid token' });
+    }
+
+    // Check if user email is the admin email
+    const adminEmail = 'conorogle@gmail.com';
+    if (user.email !== adminEmail) {
+      return res.status(403).json({ error: 'Forbidden - Admin access required' });
+    }
+
+    // Attach user to request for use in handlers
+    (req as any).user = user;
+    next();
+  } catch (error) {
+    console.error('Admin auth error:', error);
+    return res.status(500).json({ error: 'Internal server error during authentication' });
+  }
+}
+
+// Legacy requireAdmin for backward compatibility (API key based)
 async function requireAdmin(req: express.Request, res: express.Response, next: express.NextFunction) {
   // For MVP, use a simple API key. In production, use proper JWT auth
   const authKey = req.headers['x-api-key'] || req.query.key;
@@ -495,20 +529,65 @@ async function requireAdmin(req: express.Request, res: express.Response, next: e
   next();
 }
 
-// Admin: Trigger scraping job
-app.post('/api/admin/scrape', requireAdmin, async (req, res) => {
+// Admin: Trigger scraping job (enhanced with duplicate check)
+app.post('/api/admin/scrape', requireAdminAuth, async (req, res) => {
   try {
     const { processScrapeJob } = await import('./scraper/job-processor.js');
-    const { eventUrl, organiser } = req.body;
+    const { getScraperForUrl } = await import('./scraper/index.js');
+    const { checkEventDuplicate } = await import('./storage/supabase.js');
+    const { eventUrl, organiser, overwrite } = req.body;
 
     if (!eventUrl) {
       return res.status(400).json({ error: 'eventUrl is required' });
     }
 
+    // Get scraper to extract event info for duplicate check
+    const scraper = organiser
+      ? (await import('./scraper/index.js')).getScraperByOrganiser(organiser)
+      : getScraperForUrl(eventUrl);
+
+    if (!scraper) {
+      return res.status(400).json({ error: `No scraper available for URL: ${eventUrl}` });
+    }
+
+    // Scrape event metadata first to check for duplicates
+    let scrapedData;
+    try {
+      scrapedData = await scraper.scrapeEvent(eventUrl);
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      return res.status(500).json({ 
+        success: false, 
+        error: `Failed to scrape event: ${errorMessage}`,
+      });
+    }
+
+    // Check for duplicate
+    const duplicate = await checkEventDuplicate(
+      scrapedData.event.eventName,
+      scrapedData.event.eventDate
+    );
+
+    if (duplicate && !overwrite) {
+      // Get result count for duplicate
+      const { getEventSchema } = await import('./storage/supabase.js');
+      const schema = await getEventSchema(duplicate.id);
+      
+      return res.status(409).json({
+        success: false,
+        error: 'Duplicate event found',
+        isDuplicate: true,
+        existingEvent: duplicate,
+        resultCount: schema.totalResults,
+        message: 'An event with this name and date already exists. Set overwrite=true to proceed.',
+      });
+    }
+
+    // Proceed with scraping
     const result = await processScrapeJob({
       eventUrl,
       organiser,
-      startedBy: req.body.userId || undefined,
+      startedBy: (req as any).user?.id,
     });
 
     return res.json({
@@ -516,6 +595,7 @@ app.post('/api/admin/scrape', requireAdmin, async (req, res) => {
       jobId: result.job.id,
       eventId: result.eventId,
       resultsCount: result.resultsCount,
+      wasDuplicate: !!duplicate,
     });
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
@@ -533,6 +613,134 @@ app.get('/api/admin/scrape-jobs', requireAdmin, async (req, res) => {
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     return res.status(500).json({ error: errorMessage });
+  }
+});
+
+// Admin: Get all events with summary (requires JWT auth)
+app.get('/api/admin/events', requireAdminAuth, async (req, res) => {
+  try {
+    const { getAllEventsWithSummary } = await import('./storage/supabase.js');
+    const events = await getAllEventsWithSummary();
+    return res.json({ events });
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    return res.status(500).json({ error: errorMessage });
+  }
+});
+
+// Admin: Get detailed event information with schema
+app.get('/api/admin/events/:id', requireAdminAuth, async (req, res) => {
+  try {
+    const { getEventById, getEventSchema, getScrapeJobs } = await import('./storage/supabase.js');
+    const eventId = req.params.id;
+
+    const event = await getEventById(eventId);
+    if (!event) {
+      return res.status(404).json({ error: 'Event not found' });
+    }
+
+    const schema = await getEventSchema(eventId);
+    
+    // Get scrape jobs for this event
+    const allJobs = await getScrapeJobs(100);
+    const eventJobs = allJobs.filter(job => {
+      // Try to match by URL or event name
+      return job.event_url === event.event_url;
+    });
+
+    return res.json({
+      event,
+      schema,
+      scrapeJobs: eventJobs,
+    });
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    return res.status(500).json({ error: errorMessage });
+  }
+});
+
+// Admin: Check for duplicate event
+app.post('/api/admin/scrape/check-duplicate', requireAdminAuth, async (req, res) => {
+  try {
+    const { checkEventDuplicate } = await import('./storage/supabase.js');
+    const { eventName, eventDate } = req.body;
+
+    if (!eventName || !eventDate) {
+      return res.status(400).json({ error: 'eventName and eventDate are required' });
+    }
+
+    const duplicate = await checkEventDuplicate(eventName, eventDate);
+    
+    if (duplicate) {
+      // Get result count for duplicate
+      const { getEventSchema } = await import('./storage/supabase.js');
+      const schema = await getEventSchema(duplicate.id);
+      
+      return res.json({
+        isDuplicate: true,
+        existingEvent: duplicate,
+        resultCount: schema.totalResults,
+      });
+    }
+
+    return res.json({ isDuplicate: false });
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    return res.status(500).json({ error: errorMessage });
+  }
+});
+
+// Admin: Get failed scrape jobs
+app.get('/api/admin/scrape-jobs/failed', requireAdminAuth, async (req, res) => {
+  try {
+    const { getFailedScrapeJobs } = await import('./storage/supabase.js');
+    const jobs = await getFailedScrapeJobs();
+    return res.json({ jobs });
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    return res.status(500).json({ error: errorMessage });
+  }
+});
+
+// Admin: Retry failed scrape job
+app.post('/api/admin/scrape-jobs/:id/retry', requireAdminAuth, async (req, res) => {
+  try {
+    const { processScrapeJob } = await import('./scraper/job-processor.js');
+    const { getScrapeJob, updateScrapeJob } = await import('./storage/supabase.js');
+    const jobId = req.params.id;
+    const { eventUrl, organiser } = req.body; // Optional override
+
+    const job = await getScrapeJob(jobId);
+    if (!job) {
+      return res.status(404).json({ error: 'Job not found' });
+    }
+
+    if (job.status !== 'failed') {
+      return res.status(400).json({ error: 'Job is not in failed status' });
+    }
+
+    // Reset job to pending
+    await updateScrapeJob(jobId, {
+      status: 'pending',
+      errorMessage: null,
+    });
+
+    // Process the job with optional URL/organiser override
+    const result = await processScrapeJob({
+      eventUrl: eventUrl || job.event_url,
+      organiser: organiser || job.organiser,
+      startedBy: (req as any).user?.id,
+    });
+
+    return res.json({
+      success: true,
+      jobId: result.job.id,
+      eventId: result.eventId,
+      resultsCount: result.resultsCount,
+    });
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    return res.status(500).json({ success: false, error: errorMessage });
   }
 });
 
@@ -963,6 +1171,13 @@ app.post('/api/admin/monitoring/quick-check', requireAdmin, async (req, res) => 
     return res.status(500).json({ error: errorMessage });
   }
 });
+
+// Serve admin page route
+if (enableStaticFiles) {
+  app.get('/admin', (_req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'index.html'));
+  });
+}
 
 // Serve the main HTML page for all other routes (only if static files are enabled)
 if (enableStaticFiles) {

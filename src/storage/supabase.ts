@@ -380,3 +380,183 @@ export async function getScrapeJobs(limit: number = 50): Promise<ScrapeJob[]> {
 
   return data || [];
 }
+
+// Admin functions for event management
+
+export interface EventSummary {
+  id: string;
+  organiser: string;
+  event_name: string;
+  event_date: string;
+  event_url: string | null;
+  distance: string | null;
+  location: string | null;
+  scraped_at: string | null;
+  created_at: string;
+  result_count: number;
+  last_scrape_time: string | null;
+}
+
+export async function getAllEventsWithSummary(): Promise<EventSummary[]> {
+  // Get all events
+  const { data: events, error: eventsError } = await supabase
+    .from('events')
+    .select('*')
+    .order('created_at', { ascending: false });
+
+  if (eventsError) {
+    throw new Error(`Failed to get events: ${eventsError.message}`);
+  }
+
+  if (!events || events.length === 0) {
+    return [];
+  }
+
+  // Get result counts for each event
+  const eventIds = events.map(e => e.id);
+  const { data: results, error: resultsError } = await supabase
+    .from('race_results')
+    .select('event_id, created_at')
+    .in('event_id', eventIds);
+
+  if (resultsError) {
+    throw new Error(`Failed to get results: ${resultsError.message}`);
+  }
+
+  // Aggregate results by event
+  const resultCounts = new Map<string, { count: number; lastScrape: string | null }>();
+  
+  for (const result of results || []) {
+    const eventId = result.event_id;
+    const current = resultCounts.get(eventId) || { count: 0, lastScrape: null };
+    current.count += 1;
+    if (!current.lastScrape || result.created_at > current.lastScrape) {
+      current.lastScrape = result.created_at;
+    }
+    resultCounts.set(eventId, current);
+  }
+
+  // Combine event data with result counts
+  return events.map(event => ({
+    ...event,
+    result_count: resultCounts.get(event.id)?.count || 0,
+    last_scrape_time: resultCounts.get(event.id)?.lastScrape || event.scraped_at,
+  }));
+}
+
+export interface EventSchema {
+  fields: Array<{
+    name: string;
+    populated: number;
+    total: number;
+    percentage: number;
+  }>;
+  distances: string[];
+  totalResults: number;
+}
+
+export async function getEventSchema(eventId: string): Promise<EventSchema> {
+  // Get all results for this event
+  const { data: results, error } = await supabase
+    .from('race_results')
+    .select('*')
+    .eq('event_id', eventId);
+
+  if (error) {
+    throw new Error(`Failed to get event results: ${error.message}`);
+  }
+
+  if (!results || results.length === 0) {
+    return {
+      fields: [],
+      distances: [],
+      totalResults: 0,
+    };
+  }
+
+  const total = results.length;
+  const fields = [
+    { name: 'position', key: 'position' },
+    { name: 'bib_number', key: 'bib_number' },
+    { name: 'name', key: 'name' },
+    { name: 'gender', key: 'gender' },
+    { name: 'category', key: 'category' },
+    { name: 'finish_time', key: 'finish_time' },
+    { name: 'pace', key: 'pace' },
+    { name: 'gender_position', key: 'gender_position' },
+    { name: 'category_position', key: 'category_position' },
+    { name: 'country', key: 'country' },
+    { name: 'time_5km', key: 'time_5km' },
+    { name: 'time_10km', key: 'time_10km' },
+    { name: 'time_13km', key: 'time_13km' },
+    { name: 'time_15km', key: 'time_15km' },
+  ];
+
+  const fieldStats = fields.map(field => {
+    const populated = results.filter(r => r[field.key as keyof typeof r] != null).length;
+    return {
+      name: field.name,
+      populated,
+      total,
+      percentage: total > 0 ? Math.round((populated / total) * 100) : 0,
+    };
+  });
+
+  // Extract unique distances from metadata
+  const distances = new Set<string>();
+  results.forEach(r => {
+    if (r.metadata && typeof r.metadata === 'object' && 'distance' in r.metadata) {
+      const dist = String(r.metadata.distance);
+      if (dist) distances.add(dist);
+    }
+  });
+
+  return {
+    fields: fieldStats,
+    distances: Array.from(distances),
+    totalResults: total,
+  };
+}
+
+export async function checkEventDuplicate(eventName: string, eventDate: string): Promise<Event | null> {
+  // Normalize event name for comparison
+  const normalizedName = normalizeName(eventName);
+
+  // Query events with matching date
+  const { data, error } = await supabase
+    .from('events')
+    .select('*')
+    .eq('event_date', eventDate);
+
+  if (error) {
+    throw new Error(`Failed to check for duplicates: ${error.message}`);
+  }
+
+  if (!data || data.length === 0) {
+    return null;
+  }
+
+  // Check if any event has a normalized name that matches
+  for (const event of data) {
+    const eventNormalizedName = normalizeName(event.event_name);
+    if (eventNormalizedName === normalizedName) {
+      return event;
+    }
+  }
+
+  return null;
+}
+
+export async function getFailedScrapeJobs(): Promise<ScrapeJob[]> {
+  const { data, error } = await supabase
+    .from('scrape_jobs')
+    .select('*')
+    .eq('status', 'failed')
+    .order('started_at', { ascending: false });
+
+  if (error) {
+    throw new Error(`Failed to get failed scrape jobs: ${error.message}`);
+  }
+
+  return data || [];
+}
