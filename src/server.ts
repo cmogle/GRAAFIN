@@ -57,13 +57,31 @@ function getEventId(req: express.Request): EventId {
 }
 
 // CORS middleware
+const allowedOrigins = [
+  'https://graafin.club',
+  'https://www.graafin.club',
+  process.env.CORS_ORIGIN,
+].filter(Boolean);
+
 app.use(cors({
-  origin: process.env.CORS_ORIGIN || '*',
+  origin: allowedOrigins.length > 0 
+    ? (origin, callback) => {
+        if (!origin) return callback(null, true);
+        if (allowedOrigins.includes(origin) || process.env.CORS_ORIGIN === '*') {
+          callback(null, true);
+        } else {
+          callback(new Error('Not allowed by CORS'));
+        }
+      }
+    : '*',
   credentials: true,
 }));
 
-// Serve static files
-app.use(express.static(path.join(__dirname, 'public')));
+// Optionally serve static files (disabled when frontend is deployed separately)
+const enableStaticFiles = process.env.ENABLE_STATIC_FILES !== 'false';
+if (enableStaticFiles) {
+  app.use(express.static(path.join(__dirname, 'public')));
+}
 
 // Apply rate limiting to API routes
 app.use('/api/', apiLimiter);
@@ -77,6 +95,7 @@ app.get('/api/health', (_req, res) => {
   };
   const notifyWhatsapp = process.env.NOTIFY_WHATSAPP || '';
   const twilioConfigured = isTwilioConfigured(twilioConfig);
+  const staticFilesEnabled = process.env.ENABLE_STATIC_FILES !== 'false';
 
   res.json({
     status: 'ok',
@@ -84,6 +103,7 @@ app.get('/api/health', (_req, res) => {
     twilioConfigured,
     notifyWhatsappSet: !!notifyWhatsapp,
     readyForHeartbeat: twilioConfigured && !!notifyWhatsapp,
+    staticFilesEnabled,
   });
 });
 
@@ -304,36 +324,19 @@ app.post('/api/monitor', async (req, res) => {
   try {
     const result = await monitor(targetUrl);
     let message = formatStatusMessage(result, targetUrl);
-    let scrapeResult = null;
 
     console.log(`   Status: ${result.currentStatus.isUp ? 'UP' : 'DOWN'} (${result.currentStatus.statusCode})`);
 
-    // Auto-scrape if site came back up
-    if (result.wentUp) {
-      console.log('   📥 Auto-scraping results...');
-      try {
-        const data = await scrapeAllResults(targetUrl);
-        await saveResults(data);
-        const total = data.categories.halfMarathon.length + data.categories.tenKm.length;
-        scrapeResult = { success: true, total, halfMarathon: data.categories.halfMarathon.length, tenKm: data.categories.tenKm.length };
-        message += `\n\n📊 Auto-scraped ${total} results (${data.categories.halfMarathon.length} HM, ${data.categories.tenKm.length} 10K)`;
-        console.log(`   ✅ Scraped ${total} results`);
-      } catch (error) {
-        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-        scrapeResult = { success: false, error: errorMessage };
-        message += `\n\n⚠️ Auto-scrape failed: ${errorMessage}`;
-        console.log(`   ⚠️ Scrape failed: ${errorMessage}`);
-      }
-
-      // Add search UI link
-      const appUrl = process.env.APP_URL || process.env.RENDER_EXTERNAL_URL;
-      if (appUrl) {
-        message += `\n\n🔍 Search results: ${appUrl}`;
-      }
-    }
-
-    // Send notification if status changed
+    // Send notification if status changed (but no auto-scraping)
     if (result.wentUp || result.wentDown) {
+      // Add search UI link if site came back up
+      if (result.wentUp) {
+        const appUrl = process.env.APP_URL || process.env.RENDER_EXTERNAL_URL;
+        if (appUrl) {
+          message += `\n\n🔍 Search results: ${appUrl}`;
+        }
+      }
+
       const twilioConfig = {
         accountSid: process.env.TWILIO_ACCOUNT_SID || '',
         authToken: process.env.TWILIO_AUTH_TOKEN || '',
@@ -354,7 +357,6 @@ app.post('/api/monitor', async (req, res) => {
       stateChanged: result.stateChanged,
       wentUp: result.wentUp,
       wentDown: result.wentDown,
-      scrapeResult,
       timestamp: new Date().toISOString(),
     });
   } catch (error) {
@@ -456,7 +458,7 @@ app.post('/api/heartbeat', async (req, res) => {
     ? data.categories.halfMarathon.length + data.categories.tenKm.length
     : 0;
 
-  const message = `💓 HopaChecker Heartbeat
+  const message = `💓 GRAAFIN Heartbeat
 
 🔍 Status: ${state.lastStatus === 'up' ? '✅ UP' : '❌ DOWN'}
 📊 Results: ${resultCount > 0 ? `${resultCount} stored` : 'Not yet scraped'}
@@ -476,12 +478,500 @@ Still watching for results!`;
   }
 });
 
-// Serve the main HTML page for all other routes
-app.get('*', (_req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'index.html'));
+// ============================================================================
+// NEW ATHLETE PLATFORM API ENDPOINTS
+// ============================================================================
+
+// Simple auth middleware for admin endpoints
+async function requireAdmin(req: express.Request, res: express.Response, next: express.NextFunction) {
+  // For MVP, use a simple API key. In production, use proper JWT auth
+  const authKey = req.headers['x-api-key'] || req.query.key;
+  const expectedKey = process.env.ADMIN_API_KEY;
+
+  if (!expectedKey || authKey !== expectedKey) {
+    return res.status(401).json({ error: 'Unauthorized - Admin access required' });
+  }
+
+  next();
+}
+
+// Admin: Trigger scraping job
+app.post('/api/admin/scrape', requireAdmin, async (req, res) => {
+  try {
+    const { processScrapeJob } = await import('./scraper/job-processor.js');
+    const { eventUrl, organiser } = req.body;
+
+    if (!eventUrl) {
+      return res.status(400).json({ error: 'eventUrl is required' });
+    }
+
+    const result = await processScrapeJob({
+      eventUrl,
+      organiser,
+      startedBy: req.body.userId || undefined,
+    });
+
+    return res.json({
+      success: true,
+      jobId: result.job.id,
+      eventId: result.eventId,
+      resultsCount: result.resultsCount,
+    });
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    return res.status(500).json({ success: false, error: errorMessage });
+  }
 });
 
+// Admin: List scraping jobs
+app.get('/api/admin/scrape-jobs', requireAdmin, async (req, res) => {
+  try {
+    const { getScrapeJobs } = await import('./storage/supabase.js');
+    const limit = parseInt(req.query.limit as string || '50', 10);
+    const jobs = await getScrapeJobs(limit);
+    return res.json({ jobs });
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    return res.status(500).json({ error: errorMessage });
+  }
+});
+
+// Athlete: Search athletes
+app.get('/api/athletes/search', async (req, res) => {
+  try {
+    const { searchAthletes } = await import('./storage/supabase.js');
+    const query = (req.query.q as string || '').trim();
+    const limit = parseInt(req.query.limit as string || '20', 10);
+
+    if (!query || query.length < 2) {
+      return res.json({ athletes: [] });
+    }
+
+    const athletes = await searchAthletes(query, limit);
+    return res.json({ athletes });
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    return res.status(500).json({ error: errorMessage });
+  }
+});
+
+// Athlete: Get athlete profile
+app.get('/api/athletes/:id', async (req, res) => {
+  try {
+    const { getAthleteById } = await import('./storage/supabase.js');
+    const athlete = await getAthleteById(req.params.id);
+
+    if (!athlete) {
+      return res.status(404).json({ error: 'Athlete not found' });
+    }
+
+    return res.json({ athlete });
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    return res.status(500).json({ error: errorMessage });
+  }
+});
+
+// Athlete: Get athlete results
+app.get('/api/athletes/:id/results', async (req, res) => {
+  try {
+    const { getAthleteResults } = await import('./storage/supabase.js');
+    const results = await getAthleteResults(req.params.id);
+    return res.json({ results });
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    return res.status(500).json({ error: errorMessage });
+  }
+});
+
+// Athlete: Claim results
+app.post('/api/athletes/claim', async (req, res) => {
+  try {
+    const { linkResultToAthlete, getAthleteByUserId } = await import('./storage/supabase.js');
+    const { resultId, athleteId, userId } = req.body;
+
+    // If userId provided, get or create athlete profile
+    let finalAthleteId = athleteId;
+    if (userId && !athleteId) {
+      let athlete = await getAthleteByUserId(userId);
+      if (!athlete) {
+        // Create athlete profile
+        const { createAthlete } = await import('./storage/supabase.js');
+        athlete = await createAthlete({
+          userId,
+          name: req.body.name || 'Unknown',
+        });
+      }
+      finalAthleteId = athlete.id;
+    }
+
+    if (!finalAthleteId || !resultId) {
+      return res.status(400).json({ error: 'athleteId and resultId are required' });
+    }
+
+    await linkResultToAthlete(resultId, finalAthleteId);
+    return res.json({ success: true, athleteId: finalAthleteId });
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    return res.status(500).json({ error: errorMessage });
+  }
+});
+
+// Performance: Get performance stats
+app.get('/api/athletes/:id/performance/stats', async (req, res) => {
+  try {
+    const { calculatePerformanceStats } = await import('./analytics/performance.js');
+    const stats = await calculatePerformanceStats(req.params.id);
+    return res.json({ stats });
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    return res.status(500).json({ error: errorMessage });
+  }
+});
+
+// Performance: Get performance trends
+app.get('/api/athletes/:id/performance/trends', async (req, res) => {
+  try {
+    const { getPerformanceTrends } = await import('./analytics/performance.js');
+    const trends = await getPerformanceTrends(req.params.id);
+    return res.json({ trends });
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    return res.status(500).json({ error: errorMessage });
+  }
+});
+
+// Performance: Compare to category
+app.get('/api/athletes/:id/performance/comparison', async (req, res) => {
+  try {
+    const { compareToCategory } = await import('./analytics/performance.js');
+    const category = (req.query.category as string) || '';
+    const comparison = await compareToCategory(req.params.id, category);
+    return res.json({ comparison });
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    return res.status(500).json({ error: errorMessage });
+  }
+});
+
+// Following: Follow athlete
+app.post('/api/athletes/:id/follow', async (req, res) => {
+  try {
+    const { followAthlete } = await import('./social/following.js');
+    const { getAthleteByUserId: getAthlete } = await import('./storage/supabase.js');
+    
+    // Get follower athlete ID (from userId in request or body)
+    const userId = req.body.userId || req.headers['x-user-id'];
+    if (!userId) {
+      return res.status(400).json({ error: 'userId required' });
+    }
+
+    const followerAthlete = await getAthlete(userId as string);
+    if (!followerAthlete) {
+      return res.status(404).json({ error: 'Follower athlete profile not found' });
+    }
+
+    await followAthlete(followerAthlete.id, req.params.id);
+    return res.json({ success: true });
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    return res.status(500).json({ error: errorMessage });
+  }
+});
+
+// Following: Unfollow athlete
+app.delete('/api/athletes/:id/follow', async (req, res) => {
+  try {
+    const { unfollowAthlete } = await import('./social/following.js');
+    const { getAthleteByUserId: getAthlete } = await import('./storage/supabase.js');
+    
+    const userId = req.body.userId || req.headers['x-user-id'];
+    if (!userId) {
+      return res.status(400).json({ error: 'userId required' });
+    }
+
+    const followerAthlete = await getAthlete(userId as string);
+    if (!followerAthlete) {
+      return res.status(404).json({ error: 'Follower athlete profile not found' });
+    }
+
+    await unfollowAthlete(followerAthlete.id, req.params.id);
+    return res.json({ success: true });
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    return res.status(500).json({ error: errorMessage });
+  }
+});
+
+// Following: Get followers
+app.get('/api/athletes/:id/followers', async (req, res) => {
+  try {
+    const { getFollowers } = await import('./social/following.js');
+    const followers = await getFollowers(req.params.id);
+    return res.json({ followers });
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    return res.status(500).json({ error: errorMessage });
+  }
+});
+
+// Following: Get following list
+app.get('/api/athletes/:id/following', async (req, res) => {
+  try {
+    const { getFollowing } = await import('./social/following.js');
+    const following = await getFollowing(req.params.id);
+    return res.json({ following });
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    return res.status(500).json({ error: errorMessage });
+  }
+});
+
+// Feed: Get results from followed athletes
+app.get('/api/feed', async (req, res) => {
+  try {
+    const { getFollowing } = await import('./social/following.js');
+    const { getAthleteResults, getAthleteByUserId: getAthlete } = await import('./storage/supabase.js');
+    
+    const userId = req.query.userId as string || req.headers['x-user-id'];
+    if (!userId) {
+      return res.status(400).json({ error: 'userId required' });
+    }
+    const followerAthlete = await getAthlete(userId);
+    if (!followerAthlete) {
+      return res.status(404).json({ error: 'Athlete profile not found' });
+    }
+
+    const following = await getFollowing(followerAthlete.id);
+    const allResults = [];
+
+    for (const athlete of following) {
+      const results = await getAthleteResults(athlete.id);
+      allResults.push(...results.map(r => ({ ...r, athleteName: athlete.name })));
+    }
+
+    // Sort by date (most recent first)
+    allResults.sort((a, b) => {
+      const dateA = new Date(a.created_at).getTime();
+      const dateB = new Date(b.created_at).getTime();
+      return dateB - dateA;
+    });
+
+    // Apply filters
+    const limit = parseInt(req.query.limit as string || '50', 10);
+    const filteredResults = allResults.slice(0, limit);
+
+    return res.json({ results: filteredResults, total: allResults.length });
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    return res.status(500).json({ error: errorMessage });
+  }
+});
+
+// Matching: Get match suggestions for unmatched results
+app.get('/api/matching/suggestions', requireAdmin, async (req, res) => {
+  try {
+    const { findMatchesForUnmatchedResults } = await import('./matching/athlete-matcher.js');
+    const eventId = req.query.eventId as string | undefined;
+    const threshold = parseFloat(req.query.threshold as string || '0.6');
+    
+    const matches = await findMatchesForUnmatchedResults(eventId, threshold);
+    return res.json({ matches: Object.fromEntries(matches) });
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    return res.status(500).json({ error: errorMessage });
+  }
+});
+
+// Matching: Auto-match results
+app.post('/api/matching/auto-match', requireAdmin, async (req, res) => {
+  try {
+    const { autoMatchResults } = await import('./matching/athlete-matcher.js');
+    const confidenceThreshold = parseInt(req.body.confidenceThreshold || '90', 10);
+    const eventId = req.body.eventId;
+    
+    const result = await autoMatchResults(confidenceThreshold, eventId);
+    return res.json({ success: true, ...result });
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    return res.status(500).json({ error: errorMessage });
+  }
+});
+
+// ============================================================================
+// MONITORING API ENDPOINTS
+// ============================================================================
+
+// Monitoring: List all monitored endpoints
+app.get('/api/admin/monitoring/endpoints', requireAdmin, async (req, res) => {
+  try {
+    const { getAllMonitoredEndpoints } = await import('./storage/monitoring.js');
+    const enabledOnly = req.query.enabled === 'true';
+    const endpoints = await getAllMonitoredEndpoints(enabledOnly);
+    
+    // Get current status for each endpoint
+    const { getEndpointStatus } = await import('./storage/monitoring.js');
+    const endpointsWithStatus = await Promise.all(
+      endpoints.map(async (endpoint) => {
+        const status = await getEndpointStatus(endpoint.id);
+        return { ...endpoint, currentStatus: status };
+      })
+    );
+    
+    return res.json({ endpoints: endpointsWithStatus });
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    return res.status(500).json({ error: errorMessage });
+  }
+});
+
+// Monitoring: Add endpoint to monitor
+app.post('/api/admin/monitoring/endpoints', requireAdmin, async (req, res) => {
+  try {
+    const { createMonitoredEndpoint } = await import('./storage/monitoring.js');
+    const { organiser, endpointUrl, name, enabled, checkIntervalMinutes } = req.body;
+    
+    if (!organiser || !endpointUrl || !name) {
+      return res.status(400).json({ error: 'organiser, endpointUrl, and name are required' });
+    }
+    
+    const endpoint = await createMonitoredEndpoint({
+      organiser,
+      endpointUrl,
+      name,
+      enabled,
+      checkIntervalMinutes,
+    });
+    
+    return res.json({ endpoint });
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    return res.status(500).json({ error: errorMessage });
+  }
+});
+
+// Monitoring: Update endpoint configuration
+app.put('/api/admin/monitoring/endpoints/:id', requireAdmin, async (req, res) => {
+  try {
+    const { updateMonitoredEndpoint } = await import('./storage/monitoring.js');
+    const { name, enabled, checkIntervalMinutes } = req.body;
+    
+    const endpoint = await updateMonitoredEndpoint(req.params.id, {
+      name,
+      enabled,
+      checkIntervalMinutes,
+    });
+    
+    return res.json({ endpoint });
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    return res.status(500).json({ error: errorMessage });
+  }
+});
+
+// Monitoring: Delete endpoint
+app.delete('/api/admin/monitoring/endpoints/:id', requireAdmin, async (req, res) => {
+  try {
+    const { deleteMonitoredEndpoint } = await import('./storage/monitoring.js');
+    await deleteMonitoredEndpoint(req.params.id);
+    
+    return res.json({ success: true });
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    return res.status(500).json({ error: errorMessage });
+  }
+});
+
+// Monitoring: Manually trigger check
+app.post('/api/admin/monitoring/check/:id', requireAdmin, async (req, res) => {
+  try {
+    const { getMonitoredEndpoint } = await import('./storage/monitoring.js');
+    const { monitorEndpoint, formatStatusMessage } = await import('./monitoring/endpoint-monitor.js');
+    
+    const endpoint = await getMonitoredEndpoint(req.params.id);
+    if (!endpoint) {
+      return res.status(404).json({ error: 'Endpoint not found' });
+    }
+    
+    const result = await monitorEndpoint(endpoint);
+    const message = formatStatusMessage(result, endpoint.endpointUrl, endpoint.name);
+    
+    return res.json({
+      success: true,
+      result,
+      message,
+      endpoint: endpoint.name,
+    });
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    return res.status(500).json({ error: errorMessage });
+  }
+});
+
+// Monitoring: Get current status
+app.get('/api/admin/monitoring/status/:id', requireAdmin, async (req, res) => {
+  try {
+    const { getEndpointStatus, getMonitoredEndpoint } = await import('./storage/monitoring.js');
+    
+    const endpoint = await getMonitoredEndpoint(req.params.id);
+    if (!endpoint) {
+      return res.status(404).json({ error: 'Endpoint not found' });
+    }
+    
+    const status = await getEndpointStatus(req.params.id);
+    return res.json({ endpoint, status });
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    return res.status(500).json({ error: errorMessage });
+  }
+});
+
+// Monitoring: Get status history
+app.get('/api/admin/monitoring/history/:id', requireAdmin, async (req, res) => {
+  try {
+    const { getEndpointStatusHistory, getMonitoredEndpoint } = await import('./storage/monitoring.js');
+    const limit = parseInt(req.query.limit as string || '100', 10);
+    
+    const endpoint = await getMonitoredEndpoint(req.params.id);
+    if (!endpoint) {
+      return res.status(404).json({ error: 'Endpoint not found' });
+    }
+    
+    const history = await getEndpointStatusHistory(req.params.id, limit);
+    return res.json({ endpoint, history });
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    return res.status(500).json({ error: errorMessage });
+  }
+});
+
+// Monitoring: Quick check (test endpoint without saving)
+app.post('/api/admin/monitoring/quick-check', requireAdmin, async (req, res) => {
+  try {
+    const { quickCheckEndpoint } = await import('./monitoring/endpoint-monitor.js');
+    const { url } = req.body;
+    
+    if (!url) {
+      return res.status(400).json({ error: 'url is required' });
+    }
+    
+    const status = await quickCheckEndpoint(url);
+    return res.json({ status });
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    return res.status(500).json({ error: errorMessage });
+  }
+});
+
+// Serve the main HTML page for all other routes (only if static files are enabled)
+if (enableStaticFiles) {
+  app.get('*', (_req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'index.html'));
+  });
+}
+
 app.listen(PORT, '0.0.0.0', () => {
-  console.log(`🏃 HopaChecker server running on port ${PORT}`);
+  console.log(`🏃 GRAAFIN server running on port ${PORT}`);
   console.log(`📁 Results files: ${getResultsFilePath('dcs')}, ${getResultsFilePath('plus500')}`);
+  console.log(`📦 Static files: ${enableStaticFiles ? 'enabled' : 'disabled' (API-only mode)`);
 });

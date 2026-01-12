@@ -6,6 +6,11 @@ import { monitor, checkSiteStatus, formatStatusMessage, loadState } from './moni
 import { scrapeAllResults, scrapeEvoChipResults, saveResults, loadResults, getResultsFilePath } from './scraper.js';
 import { searchFromFile, searchByName, formatSearchResults } from './search.js';
 import { sendNotification, isTwilioConfigured } from './notifications/index.js';
+import * as s3Storage from './storage/s3.js';
+import * as fs from 'fs/promises';
+import * as path from 'path';
+import { fileURLToPath } from 'url';
+import { existsSync, mkdirSync } from 'fs';
 import type { Config } from './types.js';
 
 // Load environment variables
@@ -29,8 +34,8 @@ function getConfig(): Config {
 const program = new Command();
 
 program
-  .name('hopachecker')
-  .description('Monitor and scrape Dubai Creek Striders Half Marathon results')
+  .name('graafin')
+  .description('GRAAFIN - Athlete Performance Platform')
   .version('2.0.0');
 
 // Status command
@@ -261,11 +266,99 @@ program
     console.log('\n📱 Sending test WhatsApp message...');
     const success = await sendNotification(
       { twilio: config.twilio, notifyWhatsapp: config.notifyWhatsapp },
-      '🧪 Test message from HopaChecker!\n\nYour notifications are working correctly.'
+      '🧪 Test message from GRAAFIN!\n\nYour notifications are working correctly.'
     );
 
     if (success) {
       console.log('✅ Test message sent successfully!');
+    }
+  });
+
+// Sync command - download data from S3 to local filesystem
+program
+  .command('sync')
+  .description('Sync data from S3 to local filesystem')
+  .option('-b, --bucket <bucket>', 'S3 bucket name (overrides S3_BUCKET_NAME env var)')
+  .option('-k, --key <key>', 'S3 object key to sync (default: results.json)', 'results.json')
+  .option('-o, --output <path>', 'Local output path (default: data/results.json)')
+  .option('--event <eventId>', 'Event ID: dcs or plus500 (affects default key)', 'dcs')
+  .action(async (options) => {
+    // Determine bucket name
+    const bucketName = options.bucket || process.env.S3_BUCKET_NAME;
+    if (!bucketName) {
+      console.error('\n❌ S3 bucket name is required.');
+      console.log('   Set S3_BUCKET_NAME environment variable or use --bucket option');
+      process.exit(1);
+    }
+
+    // Determine S3 key
+    let s3Key = options.key;
+    if (options.key === 'results.json' && options.event === 'plus500') {
+      s3Key = 'results-plus500.json';
+    }
+
+    // Determine local output path
+    const __filename = fileURLToPath(import.meta.url);
+    const __dirname = path.dirname(__filename);
+    const dataDir = process.env.DATA_PATH || path.join(__dirname, '..', '..', 'data');
+    const outputPath = options.output || path.join(dataDir, s3Key);
+
+    console.log(`\n📥 Syncing from S3: s3://${bucketName}/${s3Key}`);
+    console.log(`   To local: ${outputPath}\n`);
+
+    // Temporarily set bucket name if provided via option
+    const originalBucket = process.env.S3_BUCKET_NAME;
+    try {
+      if (options.bucket) {
+        process.env.S3_BUCKET_NAME = options.bucket;
+      }
+
+      // Load data from S3
+      const data = await s3Storage.loadFromS3(s3Key);
+
+      if (!data) {
+        console.error(`❌ No data found at s3://${bucketName}/${s3Key}`);
+        console.log('   The object may not exist or you may not have access.');
+        process.exit(1);
+      }
+
+      // Ensure data directory exists
+      const outputDir = path.dirname(outputPath);
+      if (!existsSync(outputDir)) {
+        mkdirSync(outputDir, { recursive: true });
+        console.log(`📁 Created directory: ${outputDir}`);
+      }
+
+      // Save to local filesystem
+      await fs.writeFile(outputPath, JSON.stringify(data, null, 2), 'utf-8');
+      
+      console.log(`✅ Successfully synced data to: ${outputPath}`);
+      
+      // Show some stats if it's race data
+      if (data && typeof data === 'object' && 'categories' in data) {
+        const raceData = data as { categories?: { halfMarathon?: unknown[]; tenKm?: unknown[] } };
+        const hmCount = raceData.categories?.halfMarathon?.length || 0;
+        const tenKmCount = raceData.categories?.tenKm?.length || 0;
+        console.log(`   Half Marathon: ${hmCount} results`);
+        console.log(`   10km: ${tenKmCount} results`);
+      }
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      console.error(`\n❌ Sync failed: ${errorMessage}`);
+      console.log('\n   Make sure you have:');
+      console.log('   - AWS credentials configured (AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY)');
+      console.log('   - S3_BUCKET_NAME environment variable set (or use --bucket option)');
+      console.log('   - Proper permissions to read from the S3 bucket');
+      process.exit(1);
+    } finally {
+      // Always restore original bucket name
+      if (options.bucket) {
+        if (originalBucket) {
+          process.env.S3_BUCKET_NAME = originalBucket;
+        } else {
+          delete process.env.S3_BUCKET_NAME;
+        }
+      }
     }
   });
 

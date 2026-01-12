@@ -60,3 +60,66 @@ export interface Config {
 
 // Event identifier type
 export type EventId = 'dcs' | 'plus500';
+
+// New types for athlete platform
+export interface Athlete {
+  id: string;
+  userId: string | null;
+  name: string;
+  normalizedName: string | null;
+  gender: string | null;
+  dateOfBirth: string | null;
+  country: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface Event {
+  id: string;
+  organiser: string;
+  eventName: string;
+  eventDate: string;
+  eventUrl: string | null;
+  distance: string | null;
+  location: string | null;
+  scrapedAt: string | null;
+  metadata: Record<string, unknown> | null;
+  createdAt: string;
+}
+
+export interface RaceResultRow {
+  id: string;
+  eventId: string;
+  athleteId: string | null;
+  position: number | null;
+  bibNumber: string | null;
+  name: string;
+  normalizedName: string | null;
+  gender: string | null;
+  category: string | null;
+  finishTime: string | null;
+  pace: string | null;
+  genderPosition: number | null;
+  categoryPosition: number | null;
+  country: string | null;
+  time5km: string | null;
+  time10km: string | null;
+  time13km: string | null;
+  time15km: string | null;
+  metadata: Record<string, unknown> | null;
+  createdAt: string;
+}
+
+export interface ScrapeJob {
+  id: string;
+  organiser: string;
+  eventUrl: string;
+  status: 'pending' | 'running' | 'completed' | 'failed';
+  resultsCount: number | null;
+  errorMessage: string | null;
+  startedBy: string | null;
+  startedAt: string;
+  completedAt: string | null;
+}
+
+export type Organiser = 'hopasports' | 'evochip' | string;

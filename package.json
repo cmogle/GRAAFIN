@@ -1,7 +1,7 @@
 {
-  "name": "hopachecker",
+  "name": "graafin",
   "version": "2.0.0",
-  "description": "Monitor, scrape, and search Dubai Creek Striders Half Marathon results",
+  "description": "GRAAFIN - Athlete Performance Platform for tracking multi-year performance across race organizers",
   "main": "dist/index.js",
   "type": "module",
   "scripts": {
@@ -13,7 +13,8 @@
     "monitor": "tsx src/index.ts monitor",
     "scrape": "tsx src/index.ts scrape",
     "search": "tsx src/index.ts search",
-    "status": "tsx src/index.ts status"
+    "status": "tsx src/index.ts status",
+    "sync": "tsx src/index.ts sync"
   },
   "keywords": [
     "marathon",
@@ -25,8 +26,10 @@
   "license": "MIT",
   "dependencies": {
     "@aws-sdk/client-s3": "^3.654.0",
+    "@supabase/supabase-js": "^2.39.0",
     "@types/cors": "^2.8.19",
     "@types/express": "^4.17.21",
+    "@types/jsonwebtoken": "^9.0.5",
     "@types/node": "^20.11.16",
     "@types/node-cron": "^3.0.11",
     "axios": "^1.6.7",
@@ -37,6 +40,7 @@
     "express": "^4.18.2",
     "express-rate-limit": "^8.2.1",
     "fuse.js": "^7.0.0",
+    "jsonwebtoken": "^9.0.2",
     "node-cron": "^3.0.3",
     "twilio": "^5.0.0",
     "typescript": "^5.3.3"

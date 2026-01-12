@@ -4,12 +4,12 @@
 services:
   # Web service for search UI, API, and monitoring
   - type: web
-    name: hopachecker-web
+    name: graafin-web
     runtime: node
     buildCommand: npm install && npm run build
     startCommand: node dist/server.js
     disk:
-      name: hopachecker-data
+      name: graafin-data
       mountPath: /data
       sizeGB: 1
     envVars:
@@ -31,15 +31,26 @@ services:
         sync: false
       - key: NOTIFY_WHATSAPP
         sync: false
+      # Optional: Set ENABLE_STATIC_FILES=false to disable static file serving (API-only mode)
+      # Recommended when frontend is deployed separately (e.g., Cloudflare Pages)
+      # Default: true (enabled for backward compatibility)
+      - key: ENABLE_STATIC_FILES
+        sync: false
+      # Optional: Set CORS_ORIGIN to allow requests from frontend domain
+      # Format: https://graafin.club,https://www.graafin.club
+      # Note: Add this manually in Render.com dashboard after deployment
+      - key: CORS_ORIGIN
+        sync: false
 
   # Cron job that triggers the monitor endpoint every 5 minutes
+  # Only checks if hopasports results site is operational (no auto-scraping)
   - type: cron
-    name: hopachecker-cron
+    name: graafin-cron
     runtime: node
     schedule: "*/5 * * * *"
     buildCommand: echo "No build needed"
     startCommand: |
-      APP_URL="${RENDER_SERVICE_URL:-https://hopachecker-web.onrender.com}"
+      APP_URL="${RENDER_SERVICE_URL:-https://graafin-web.onrender.com}"
       curl -X POST "$APP_URL/api/monitor?key=${MONITOR_SECRET}" \
         -H "Content-Type: application/json" \
         -H "x-monitor-key: ${MONITOR_SECRET}" \
@@ -50,26 +61,5 @@ services:
       - key: MONITOR_SECRET
         fromService:
           type: web
-          name: hopachecker-web
-          envVarKey: MONITOR_SECRET
-
-  # Hourly heartbeat - sends WhatsApp notification to confirm service is running
-  - type: cron
-    name: hopachecker-heartbeat
-    runtime: node
-    schedule: "0 * * * *"
-    buildCommand: echo "No build needed"
-    startCommand: |
-      APP_URL="${RENDER_SERVICE_URL:-https://hopachecker-web.onrender.com}"
-      curl -X POST "$APP_URL/api/heartbeat?key=${MONITOR_SECRET}" \
-        -H "Content-Type: application/json" \
-        -H "x-monitor-key: ${MONITOR_SECRET}" \
-        --max-time 30 \
-        --retry 2 \
-        || echo "Heartbeat request failed"
-    envVars:
-      - key: MONITOR_SECRET
-        fromService:
-          type: web
-          name: hopachecker-web
+          name: graafin-web
           envVarKey: MONITOR_SECRET

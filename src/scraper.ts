@@ -50,7 +50,7 @@ export async function fetchPage(url: string): Promise<string> {
   const response = await axios.get(url, {
     timeout: 60000,
     headers: {
-      'User-Agent': 'HopaChecker/1.0 (Race Results Monitor)',
+      'User-Agent': 'GRAAFIN/2.0 (Athlete Performance Platform)',
       'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
     },
   });
@@ -68,7 +68,7 @@ export async function fetchResultsFromApi(
   const response = await axios.get(apiUrl, {
     timeout: 60000,
     headers: {
-      'User-Agent': 'HopaChecker/1.0 (Race Results Monitor)',
+      'User-Agent': 'GRAAFIN/2.0 (Athlete Performance Platform)',
       'Accept': 'application/json, text/html, */*',
     },
   });
@@ -200,7 +200,7 @@ export async function checkResultsApiStatus(url: string): Promise<{ isUp: boolea
       timeout: 30000,
       validateStatus: () => true,
       headers: {
-        'User-Agent': 'HopaChecker/1.0 (Race Results Monitor)',
+        'User-Agent': 'GRAAFIN/2.0 (Athlete Performance Platform)',
       },
     });
 
@@ -316,6 +316,7 @@ export async function scrapePlus500Results(url: string = 'https://results.hopasp
   return raceData;
 }
 
+// Helper function to scrape a single distance
 async function scrapeEvoChipDistance(baseUrl: string, distance: 'hm' | '10k'): Promise<RaceResult[]> {
   const results: RaceResult[] = [];
   const urlObj = new URL(baseUrl);
@@ -484,18 +485,24 @@ async function scrapeEvoChipDistance(baseUrl: string, distance: 'hm' | '10k'): P
 export async function scrapeEvoChipResults(url: string): Promise<RaceData> {
   console.log(`Fetching EvoChip results (both distances): ${url}`);
   
+  // Parse the URL to extract base parameters
   const urlObj = new URL(url);
+  const eventId = urlObj.searchParams.get('eventid') || '';
+  
+  // Build base URL (without distance parameter)
   const baseUrlObj = new URL(url);
   baseUrlObj.searchParams.delete('distance');
   baseUrlObj.searchParams.delete('page');
   const baseUrl = baseUrlObj.toString();
 
+  // Scrape both distances
   console.log('\n📥 Scraping Half Marathon results...');
   const halfMarathon = await scrapeEvoChipDistance(baseUrl, 'hm');
   
   console.log('\n📥 Scraping 10km results...');
   const tenKm = await scrapeEvoChipDistance(baseUrl, '10k');
 
+  // Extract event name from a sample page
   let eventName = 'Marina Home Dubai Creek Striders Half Marathon & 10km 2026';
   try {
     const sampleUrlObj = new URL(baseUrl);
@@ -503,23 +510,27 @@ export async function scrapeEvoChipResults(url: string): Promise<RaceData> {
     const sampleHtml = await fetchPage(sampleUrlObj.toString());
     const $ = cheerio.load(sampleHtml);
     const titleMatch = $('h1, h2, .event-title, title').first().text();
-    if (titleMatch) eventName = titleMatch.trim();
+    if (titleMatch) {
+      eventName = titleMatch.trim();
+    }
   } catch (error) {
     // Use default event name if extraction fails
   }
 
   const raceData: RaceData = {
     eventName,
-    eventDate: '2026-01-11',
+    eventDate: '2026-01-11', // Update if we can extract from page
     url: baseUrl,
     scrapedAt: new Date().toISOString(),
-    categories: { halfMarathon, tenKm },
+    categories: {
+      halfMarathon,
+      tenKm,
+    },
   };
 
   console.log(`\n✅ Scraping complete: ${halfMarathon.length} HM, ${tenKm.length} 10K`);
   return raceData;
 }
-
 
 // Re-export storage functions for backwards compatibility
 export async function saveResults(data: RaceData, eventId: EventId = 'dcs'): Promise<void> {

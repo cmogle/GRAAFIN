@@ -1,7 +1,11 @@
 import axios from 'axios';
 import * as cheerio from 'cheerio';
-import type { MonitorState, SiteStatus } from './types.js';
-import { saveState as storageSaveState, loadState as storageLoadState } from './storage/index.js';
+import type { SiteStatus, MonitorResult } from './types.js';
+import {
+  saveEndpointStatus,
+  getEndpointStatus,
+  type MonitoredEndpoint,
+} from '../storage/monitoring.js';
 
 // Extract the results API URL from the main page
 function extractResultsApiUrl(html: string): string | null {
@@ -33,6 +37,9 @@ function extractResultsApiUrl(html: string): string | null {
   return null;
 }
 
+/**
+ * Check the status of an endpoint
+ */
 export async function checkSiteStatus(url: string): Promise<SiteStatus> {
   const startTime = Date.now();
 
@@ -115,76 +122,66 @@ export async function checkSiteStatus(url: string): Promise<SiteStatus> {
   }
 }
 
-export async function loadState(): Promise<MonitorState> {
-  const state = await storageLoadState();
-  if (state) {
-    return state;
-  }
+/**
+ * Monitor an endpoint and save status to database
+ */
+export async function monitorEndpoint(endpoint: MonitoredEndpoint): Promise<MonitorResult> {
+  const previousStatus = await getEndpointStatus(endpoint.id);
+  const previousStatusLabel = previousStatus?.status || 'unknown';
 
-  // Default state if not found
-  return {
-    lastStatus: 'unknown',
-    lastChecked: new Date().toISOString(),
-    lastStatusChange: new Date().toISOString(),
-    consecutiveFailures: 0,
-  };
-}
+  // Check current status
+  const currentStatus = await checkSiteStatus(endpoint.endpointUrl);
+  const currentStatusLabel: 'up' | 'down' | 'unknown' = currentStatus.isUp ? 'up' : 'down';
 
-export async function saveState(state: MonitorState): Promise<void> {
-  await storageSaveState(state);
-}
-
-export interface MonitorResult {
-  currentStatus: SiteStatus;
-  previousState: MonitorState;
-  stateChanged: boolean;
-  wentUp: boolean;
-  wentDown: boolean;
-}
-
-export async function monitor(url: string): Promise<MonitorResult> {
-  const previousState = await loadState();
-  const currentStatus = await checkSiteStatus(url);
-
-  const currentStatusLabel = currentStatus.isUp ? 'up' : 'down';
-  const stateChanged = previousState.lastStatus !== currentStatusLabel &&
-                       previousState.lastStatus !== 'unknown';
+  // Determine if state changed
+  const stateChanged =
+    previousStatusLabel !== 'unknown' && previousStatusLabel !== currentStatusLabel;
   const wentUp = stateChanged && currentStatus.isUp;
   const wentDown = stateChanged && !currentStatus.isUp;
 
-  // Update state
-  const newState: MonitorState = {
-    lastStatus: currentStatusLabel,
-    lastChecked: new Date().toISOString(),
-    lastStatusChange: stateChanged ? new Date().toISOString() : previousState.lastStatusChange,
-    consecutiveFailures: currentStatus.isUp ? 0 : previousState.consecutiveFailures + 1,
-  };
-
-  await saveState(newState);
+  // Save status to database
+  await saveEndpointStatus(endpoint.id, {
+    status: currentStatusLabel,
+    statusCode: currentStatus.statusCode,
+    responseTimeMs: currentStatus.responseTime,
+    hasResults: currentStatus.hasResults,
+    errorMessage: currentStatus.error || null,
+  });
 
   return {
     currentStatus,
-    previousState,
+    previousStatus: previousStatusLabel === 'unknown' ? null : (previousStatusLabel as 'up' | 'down'),
     stateChanged,
     wentUp,
     wentDown,
   };
 }
 
-export function formatStatusMessage(result: MonitorResult, url: string): string {
+/**
+ * Quick check an endpoint without saving (for testing)
+ */
+export async function quickCheckEndpoint(url: string): Promise<SiteStatus> {
+  return await checkSiteStatus(url);
+}
+
+/**
+ * Format status message for notifications
+ */
+export function formatStatusMessage(result: MonitorResult, url: string, endpointName?: string): string {
   const { currentStatus, wentUp, wentDown } = result;
+  const name = endpointName ? `${endpointName} - ` : '';
 
   if (wentUp) {
-    return `🟢 Results API is back UP!\n\nURL: ${url}\nStatus: ${currentStatus.statusCode}\nResponse Time: ${currentStatus.responseTime}ms\nResults Available: ${currentStatus.hasResults ? 'Yes' : 'Checking...'}\n\nCheck your results now!`;
+    return `🟢 ${name}Results API is back UP!\n\nURL: ${url}\nStatus: ${currentStatus.statusCode}\nResponse Time: ${currentStatus.responseTime}ms\nResults Available: ${currentStatus.hasResults ? 'Yes' : 'Checking...'}\n\nCheck your results now!`;
   }
 
   if (wentDown) {
-    return `🔴 Results API went DOWN\n\nURL: ${url}\nError: ${currentStatus.error || `HTTP ${currentStatus.statusCode}`}`;
+    return `🔴 ${name}Results API went DOWN\n\nURL: ${url}\nError: ${currentStatus.error || `HTTP ${currentStatus.statusCode}`}`;
   }
 
   if (currentStatus.isUp) {
-    return `✅ Results API is UP\n\nStatus: ${currentStatus.statusCode}\nResponse Time: ${currentStatus.responseTime}ms`;
+    return `✅ ${name}Results API is UP\n\nStatus: ${currentStatus.statusCode}\nResponse Time: ${currentStatus.responseTime}ms`;
   }
 
-  return `❌ Results API is DOWN\n\nError: ${currentStatus.error || `HTTP ${currentStatus.statusCode}`}\nConsecutive Failures: ${result.previousState.consecutiveFailures + 1}`;
+  return `❌ ${name}Results API is DOWN\n\nError: ${currentStatus.error || `HTTP ${currentStatus.statusCode}`}`;
 }

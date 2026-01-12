@@ -5,6 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Athlete Performance Platform</title>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <!-- Load API configuration before main script -->
+  <script src="config.js"></script>
   <style>
     * {
       box-sizing: border-box;
@@ -267,7 +269,9 @@
   </div>
 
   <script>
-    const API_BASE = '/api';
+    // API_BASE is set by config.js
+    // Fallback to '/api' for local development if config.js fails
+    const API_BASE = window.API_BASE || '/api';
 
     function showPage(pageId) {
       document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
@@ -501,21 +505,6 @@
           body: JSON.stringify({ url })
         });
         
-        // Check if response is JSON
-        const contentType = response.headers.get('content-type');
-        if (!contentType || !contentType.includes('application/json')) {
-          const text = await response.text();
-          resultDiv.innerHTML = `<div class="error">Server returned non-JSON response (${response.status}): ${text.substring(0, 200)}</div>`;
-          return;
-        }
-        
-        // Check response status
-        if (!response.ok) {
-          const errorData = await response.json().catch(() => ({ error: `HTTP ${response.status}` }));
-          resultDiv.innerHTML = `<div class="error">Error: ${errorData.error || `HTTP ${response.status}`}</div>`;
-          return;
-        }
-        
         const data = await response.json();
         
         if (data.status) {
@@ -525,8 +514,8 @@
           resultDiv.innerHTML = `
             <div style="background: ${status.isUp ? '#dfd' : '#fee'}; padding: 15px; border-radius: 4px; margin-top: 10px;">
               ${statusIcon} <strong>Status: ${status.isUp ? 'UP' : 'DOWN'}</strong><br>
-              Status Code: ${status.statusCode || 'N/A'}<br>
-              Response Time: ${status.responseTime || 'N/A'}ms<br>
+              Status Code: ${status.statusCode}<br>
+              Response Time: ${status.responseTime}ms<br>
               Has Results: ${status.hasResults ? 'Yes' : 'No'}<br>
               ${status.error ? `Error: ${status.error}` : ''}
             </div>
@@ -535,7 +524,7 @@
           resultDiv.innerHTML = `<div class="error">Error: ${data.error || 'Unknown error'}</div>`;
         }
       } catch (error) {
-        resultDiv.innerHTML = `<div class="error">Error: ${error.message || 'Failed to test endpoint'}</div>`;
+        resultDiv.innerHTML = `<div class="error">Error: ${error.message}</div>`;
       }
     }
 
