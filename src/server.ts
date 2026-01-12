@@ -733,7 +733,8 @@ app.get('/api/feed', async (req, res) => {
     const { getFollowing } = await import('./social/following.js');
     const { getAthleteResults, getAthleteByUserId: getAthlete } = await import('./storage/supabase.js');
     
-    const userId = req.query.userId as string || req.headers['x-user-id'];
+    const userIdParam = req.query.userId;
+    const userId = (Array.isArray(userIdParam) ? userIdParam[0] : userIdParam) as string || req.headers['x-user-id'] as string;
     if (!userId) {
       return res.status(400).json({ error: 'userId required' });
     }

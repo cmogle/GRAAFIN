@@ -203,6 +203,102 @@ export interface Database {
           completed_at?: string | null;
         };
       };
+      monitored_endpoints: {
+        Row: {
+          id: string;
+          organiser: string;
+          endpoint_url: string;
+          name: string;
+          enabled: boolean;
+          check_interval_minutes: number;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          organiser: string;
+          endpoint_url: string;
+          name: string;
+          enabled?: boolean;
+          check_interval_minutes?: number;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          organiser?: string;
+          endpoint_url?: string;
+          name?: string;
+          enabled?: boolean;
+          check_interval_minutes?: number;
+          created_at?: string;
+          updated_at?: string;
+        };
+      };
+      endpoint_status_history: {
+        Row: {
+          id: string;
+          endpoint_id: string;
+          status: string;
+          status_code: number | null;
+          response_time_ms: number | null;
+          has_results: boolean;
+          error_message: string | null;
+          checked_at: string;
+        };
+        Insert: {
+          id?: string;
+          endpoint_id: string;
+          status: string;
+          status_code?: number | null;
+          response_time_ms?: number | null;
+          has_results?: boolean;
+          error_message?: string | null;
+          checked_at?: string;
+        };
+        Update: {
+          id?: string;
+          endpoint_id?: string;
+          status?: string;
+          status_code?: number | null;
+          response_time_ms?: number | null;
+          has_results?: boolean;
+          error_message?: string | null;
+          checked_at?: string;
+        };
+      };
+      endpoint_status_current: {
+        Row: {
+          endpoint_id: string;
+          status: string;
+          status_code: number | null;
+          response_time_ms: number | null;
+          has_results: boolean;
+          last_checked: string;
+          last_status_change: string;
+          consecutive_failures: number;
+        };
+        Insert: {
+          endpoint_id: string;
+          status: string;
+          status_code?: number | null;
+          response_time_ms?: number | null;
+          has_results?: boolean;
+          last_checked?: string;
+          last_status_change?: string;
+          consecutive_failures?: number;
+        };
+        Update: {
+          endpoint_id?: string;
+          status?: string;
+          status_code?: number | null;
+          response_time_ms?: number | null;
+          has_results?: boolean;
+          last_checked?: string;
+          last_status_change?: string;
+          consecutive_failures?: number;
+        };
+      };
     };
   };
 }
@@ -224,6 +320,9 @@ export const supabase = createClient<Database>(supabaseUrl, supabaseServiceKey, 
 
 // Helper function to create a client for user operations (with user's JWT)
 export function createUserClient(accessToken: string): SupabaseClient<Database> {
+  if (!supabaseUrl) {
+    throw new Error('SUPABASE_URL is not configured');
+  }
   return createClient<Database>(supabaseUrl, accessToken, {
     auth: {
       autoRefreshToken: true,

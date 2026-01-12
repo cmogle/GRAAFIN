@@ -12,7 +12,7 @@ export async function followAthlete(followerId: string, followingId: string): Pr
   const { error } = await supabase.from('athlete_follows').insert({
     follower_id: followerId,
     following_id: followingId,
-  });
+  } as any);
 
   if (error) {
     if (error.code === '23505') {

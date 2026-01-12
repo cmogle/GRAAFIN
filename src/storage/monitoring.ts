@@ -49,7 +49,7 @@ export async function createMonitoredEndpoint(endpoint: {
       name: endpoint.name,
       enabled: endpoint.enabled !== undefined ? endpoint.enabled : true,
       check_interval_minutes: endpoint.checkIntervalMinutes || 5,
-    })
+    } as any)
     .select()
     .single();
 
@@ -57,15 +57,16 @@ export async function createMonitoredEndpoint(endpoint: {
     throw new Error(`Failed to create monitored endpoint: ${error.message}`);
   }
 
+  const row = data as any;
   return {
-    id: data.id,
-    organiser: data.organiser,
-    endpointUrl: data.endpoint_url,
-    name: data.name,
-    enabled: data.enabled,
-    checkIntervalMinutes: data.check_interval_minutes,
-    createdAt: data.created_at,
-    updatedAt: data.updated_at,
+    id: row.id,
+    organiser: row.organiser,
+    endpointUrl: row.endpoint_url,
+    name: row.name,
+    enabled: row.enabled,
+    checkIntervalMinutes: row.check_interval_minutes,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
   };
 }
 
@@ -83,15 +84,16 @@ export async function getMonitoredEndpoint(endpointId: string): Promise<Monitore
     throw new Error(`Failed to get monitored endpoint: ${error.message}`);
   }
 
+  const row = data as any;
   return {
-    id: data.id,
-    organiser: data.organiser,
-    endpointUrl: data.endpoint_url,
-    name: data.name,
-    enabled: data.enabled,
-    checkIntervalMinutes: data.check_interval_minutes,
-    createdAt: data.created_at,
-    updatedAt: data.updated_at,
+    id: row.id,
+    organiser: row.organiser,
+    endpointUrl: row.endpoint_url,
+    name: row.name,
+    enabled: row.enabled,
+    checkIntervalMinutes: row.check_interval_minutes,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
   };
 }
 
@@ -108,7 +110,7 @@ export async function getAllMonitoredEndpoints(enabledOnly: boolean = false): Pr
     throw new Error(`Failed to get monitored endpoints: ${error.message}`);
   }
 
-  return (data || []).map((item) => ({
+  return ((data || []) as any[]).map((item: any) => ({
     id: item.id,
     organiser: item.organiser,
     endpointUrl: item.endpoint_url,
@@ -135,6 +137,7 @@ export async function updateMonitoredEndpoint(
 
   const { data, error } = await supabase
     .from('monitored_endpoints')
+    // @ts-ignore - Supabase type inference issue
     .update(updateData)
     .eq('id', endpointId)
     .select()
@@ -144,15 +147,16 @@ export async function updateMonitoredEndpoint(
     throw new Error(`Failed to update monitored endpoint: ${error.message}`);
   }
 
+  const row = data as any;
   return {
-    id: data.id,
-    organiser: data.organiser,
-    endpointUrl: data.endpoint_url,
-    name: data.name,
-    enabled: data.enabled,
-    checkIntervalMinutes: data.check_interval_minutes,
-    createdAt: data.created_at,
-    updatedAt: data.updated_at,
+    id: row.id,
+    organiser: row.organiser,
+    endpointUrl: row.endpoint_url,
+    name: row.name,
+    enabled: row.enabled,
+    checkIntervalMinutes: row.check_interval_minutes,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
   };
 }
 
@@ -187,7 +191,7 @@ export async function saveEndpointStatus(
     response_time_ms: status.responseTimeMs,
     has_results: status.hasResults,
     error_message: status.errorMessage || null,
-  });
+  } as any);
 
   if (historyError) {
     throw new Error(`Failed to save status history: ${historyError.message}`);
@@ -220,7 +224,7 @@ export async function saveEndpointStatus(
 
   const { error: currentError } = await supabase
     .from('endpoint_status_current')
-    .upsert(currentStatusData, { onConflict: 'endpoint_id' });
+    .upsert(currentStatusData as any, { onConflict: 'endpoint_id' });
 
   if (currentError) {
     throw new Error(`Failed to save current status: ${currentError.message}`);
@@ -241,15 +245,16 @@ export async function getEndpointStatus(endpointId: string): Promise<EndpointSta
     throw new Error(`Failed to get endpoint status: ${error.message}`);
   }
 
+  const row = data as any;
   return {
-    endpointId: data.endpoint_id,
-    status: data.status as 'up' | 'down' | 'unknown',
-    statusCode: data.status_code,
-    responseTimeMs: data.response_time_ms,
-    hasResults: data.has_results,
-    lastChecked: data.last_checked,
-    lastStatusChange: data.last_status_change,
-    consecutiveFailures: data.consecutive_failures,
+    endpointId: row.endpoint_id,
+    status: row.status as 'up' | 'down' | 'unknown',
+    statusCode: row.status_code,
+    responseTimeMs: row.response_time_ms,
+    hasResults: row.has_results,
+    lastChecked: row.last_checked,
+    lastStatusChange: row.last_status_change,
+    consecutiveFailures: row.consecutive_failures,
   };
 }
 
@@ -268,7 +273,7 @@ export async function getEndpointStatusHistory(
     throw new Error(`Failed to get status history: ${error.message}`);
   }
 
-  return (data || []).map((item) => ({
+  return ((data || []) as any[]).map((item: any) => ({
     id: item.id,
     endpointId: item.endpoint_id,
     status: item.status as 'up' | 'down' | 'unknown',

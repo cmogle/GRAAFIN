@@ -1,10 +1,10 @@
 import { supabase, normalizeName, type Database } from '../db/supabase.js';
 import type { RaceResult } from '../types.js';
 
-type Athlete = Database['public']['Tables']['athletes']['Row'];
+export type Athlete = Database['public']['Tables']['athletes']['Row'];
 type Event = Database['public']['Tables']['events']['Row'];
-type RaceResultRow = Database['public']['Tables']['race_results']['Row'];
-type ScrapeJob = Database['public']['Tables']['scrape_jobs']['Row'];
+export type RaceResultRow = Database['public']['Tables']['race_results']['Row'];
+export type ScrapeJob = Database['public']['Tables']['scrape_jobs']['Row'];
 
 // Event storage functions
 export async function saveEvent(event: {
@@ -27,7 +27,7 @@ export async function saveEvent(event: {
       location: event.location || null,
       scraped_at: new Date().toISOString(),
       metadata: event.metadata || null,
-    })
+    } as any)
     .select('id')
     .single();
 
@@ -35,7 +35,7 @@ export async function saveEvent(event: {
     throw new Error(`Failed to save event: ${error.message}`);
   }
 
-  return data.id;
+  return (data as any).id;
 }
 
 export async function getEventByUrl(eventUrl: string): Promise<Event | null> {
@@ -111,7 +111,7 @@ export async function saveResults(
 
   for (let i = 0; i < resultsToInsert.length; i += batchSize) {
     const batch = resultsToInsert.slice(i, i + batchSize);
-    const { error } = await supabase.from('race_results').insert(batch);
+    const { error } = await supabase.from('race_results').insert(batch as any);
 
     if (error) {
       throw new Error(`Failed to save results batch: ${error.message}`);
@@ -159,6 +159,7 @@ export async function getUnmatchedResults(eventId?: string): Promise<RaceResultR
 export async function linkResultToAthlete(resultId: string, athleteId: string): Promise<void> {
   const { error } = await supabase
     .from('race_results')
+    // @ts-ignore - Supabase type inference issue
     .update({ athlete_id: athleteId })
     .eq('id', resultId);
 
@@ -170,6 +171,7 @@ export async function linkResultToAthlete(resultId: string, athleteId: string): 
 export async function unlinkResultFromAthlete(resultId: string): Promise<void> {
   const { error } = await supabase
     .from('race_results')
+    // @ts-ignore - Supabase type inference issue
     .update({ athlete_id: null })
     .eq('id', resultId);
 
@@ -195,7 +197,7 @@ export async function createAthlete(athlete: {
       gender: athlete.gender || null,
       date_of_birth: athlete.dateOfBirth || null,
       country: athlete.country || null,
-    })
+    } as any)
     .select()
     .single();
 
@@ -277,6 +279,7 @@ export async function updateAthlete(
 
   const { data, error } = await supabase
     .from('athletes')
+    // @ts-ignore - Supabase type inference issue
     .update(updateData)
     .eq('id', athleteId)
     .select()
@@ -302,7 +305,7 @@ export async function createScrapeJob(job: {
       event_url: job.eventUrl,
       status: 'pending',
       started_by: job.startedBy || null,
-    })
+    } as any)
     .select()
     .single();
 
@@ -334,6 +337,7 @@ export async function updateScrapeJob(
 
   const { data, error } = await supabase
     .from('scrape_jobs')
+    // @ts-ignore - Supabase type inference issue
     .update(updateData)
     .eq('id', jobId)
     .select()
