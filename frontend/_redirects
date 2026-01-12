@@ -1,3 +1,4 @@
 # Cloudflare Pages redirects file
 # This ensures all routes are handled by index.html for SPA routing
+/admin    /index.html   200
 /*    /index.html   200

@@ -64,6 +64,9 @@ function setupRouting() {
   // Handle hash changes
   window.addEventListener('hashchange', handleRoute);
   
+  // Handle popstate (browser back/forward)
+  window.addEventListener('popstate', handleRoute);
+  
   // Handle initial route
   handleRoute();
 }
@@ -75,12 +78,15 @@ function handleRoute() {
   const hash = window.location.hash;
   const path = window.location.pathname;
   
+  // Normalize path (remove trailing slash)
+  const normalizedPath = path.replace(/\/$/, '') || '/';
+  
   if (hash.startsWith('#/athlete/')) {
     const athleteId = hash.replace('#/athlete/', '');
     if (athleteId) {
       showAthleteProfile(athleteId);
     }
-  } else if (hash === '#/admin' || path === '/admin' || path.endsWith('/admin')) {
+  } else if (hash === '#/admin' || normalizedPath === '/admin') {
     showAdminPage();
   } else {
     showLanding();
