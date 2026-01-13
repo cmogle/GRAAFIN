@@ -746,7 +746,7 @@ app.post('/api/admin/scrape-jobs/:id/retry', requireAdminAuth, async (req, res) 
     // Reset job to pending
     await updateScrapeJob(jobId, {
       status: 'pending',
-      errorMessage: null,
+      errorMessage: undefined,
     });
 
     // Process the job with optional URL/organiser override
@@ -1000,13 +1000,13 @@ app.get('/api/auth/strava/callback', async (req, res) => {
     }
 
     if (existingClaim) {
-      await supabase
-        .from('profile_claims')
+      await (supabase
+        .from('profile_claims') as any)
         .update(claimData)
         .eq('id', (existingClaim as any).id);
     } else {
-      await supabase
-        .from('profile_claims')
+      await (supabase
+        .from('profile_claims') as any)
         .insert(claimData);
     }
 
@@ -1111,13 +1111,13 @@ app.post('/api/athletes/:id/verify-strava', async (req, res) => {
     );
 
     // Update claim status
-    const { data: claim, error } = await supabase
-      .from('profile_claims')
+    const { data: claim, error } = await (supabase
+      .from('profile_claims') as any)
       .update({
         verification_status: verification.verified ? 'verified' : 'pending',
         verified_at: verification.verified ? new Date().toISOString() : null,
         strava_athlete_id: stravaAthlete.id.toString(),
-      } as any)
+      })
       .eq('athlete_id', athleteId)
       .eq('user_id', userId)
       .select()
@@ -1807,8 +1807,8 @@ app.put('/api/watchlists/:id', async (req, res) => {
     if (name !== undefined) updateData.name = name;
     if (description !== undefined) updateData.description = description;
 
-    const { data: updated, error } = await supabase
-      .from('watchlists')
+    const { data: updated, error } = await (supabase
+      .from('watchlists') as any)
       .update(updateData)
       .eq('id', watchlistId)
       .select()
@@ -2073,8 +2073,8 @@ app.post('/api/watchlists/:id/notifications', async (req, res) => {
     let notification;
     if (existing) {
       // Update existing
-      const { data: updated, error: updateError } = await supabase
-        .from('watchlist_notifications')
+      const { data: updated, error: updateError } = await (supabase
+        .from('watchlist_notifications') as any)
         .update(notificationData)
         .eq('id', (existing as any).id)
         .select()
@@ -2086,8 +2086,8 @@ app.post('/api/watchlists/:id/notifications', async (req, res) => {
       notification = updated;
     } else {
       // Create new
-      const { data: created, error: createError } = await supabase
-        .from('watchlist_notifications')
+      const { data: created, error: createError } = await (supabase
+        .from('watchlist_notifications') as any)
         .insert(notificationData)
         .select()
         .single();

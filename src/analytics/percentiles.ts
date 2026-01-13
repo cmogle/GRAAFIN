@@ -35,7 +35,7 @@ export async function calculatePercentile(
   }
 
   const athleteBestSeconds = athleteTimes[0].seconds!;
-  const athleteBestTime = athleteTimes[0].time;
+  const athleteBestTime = athleteTimes[0].time!; // Non-null (filtered for valid seconds which requires valid time)
 
   // Get all results for this distance (and location if specified)
   let query = supabase

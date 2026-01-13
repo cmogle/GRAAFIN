@@ -123,3 +123,56 @@ export interface ScrapeJob {
 }
 
 export type Organiser = 'hopasports' | 'evochip' | string;
+
+// Database row types (snake_case - matches Supabase/PostgreSQL)
+export interface DbRaceResultRow {
+  id: string;
+  event_id: string;
+  athlete_id: string | null;
+  position: number | null;
+  bib_number: string | null;
+  name: string;
+  normalized_name: string | null;
+  gender: string | null;
+  category: string | null;
+  finish_time: string | null;
+  pace: string | null;
+  gender_position: number | null;
+  category_position: number | null;
+  country: string | null;
+  time_5km: string | null;
+  time_10km: string | null;
+  time_13km: string | null;
+  time_15km: string | null;
+  metadata: Record<string, unknown> | null;
+  created_at: string;
+}
+
+export interface DbEventRow {
+  id: string;
+  organiser: string;
+  event_name: string;
+  event_date: string;
+  event_url: string | null;
+  distance: string | null;
+  location: string | null;
+  scraped_at: string | null;
+  metadata: Record<string, unknown> | null;
+  created_at: string;
+}
+
+export interface DbAthleteRow {
+  id: string;
+  user_id: string | null;
+  name: string;
+  normalized_name: string | null;
+  gender: string | null;
+  date_of_birth: string | null;
+  country: string | null;
+  strava_athlete_id: string | null;
+  access_token: string | null;
+  refresh_token: string | null;
+  token_expires_at: string | null;
+  created_at: string;
+  updated_at: string;
+}

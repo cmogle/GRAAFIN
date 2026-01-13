@@ -197,14 +197,14 @@ export async function storeStravaLink(
 
   if (existing) {
     // Update existing link
-    const { error } = await supabase
-      .from('strava_links')
+    const { error } = await (supabase
+      .from('strava_links') as any)
       .update({
         access_token: accessToken,
         refresh_token: refreshToken,
         expires_at: expiresAtDate,
         updated_at: new Date().toISOString(),
-      } as any)
+      })
       .eq('id', (existing as any).id);
 
     if (error) {
@@ -212,8 +212,8 @@ export async function storeStravaLink(
     }
   } else {
     // Insert new link
-    const { error } = await supabase
-      .from('strava_links')
+    const { error } = await (supabase
+      .from('strava_links') as any)
       .insert({
         athlete_id: athleteId,
         user_id: userId,
@@ -221,7 +221,7 @@ export async function storeStravaLink(
         access_token: accessToken,
         refresh_token: refreshToken,
         expires_at: expiresAtDate,
-      } as any);
+      });
 
     if (error) {
       throw new Error(`Failed to store Strava link: ${error.message}`);
@@ -255,7 +255,7 @@ export async function getStravaLink(athleteId: string): Promise<{
     accessToken: (data as any).access_token,
     refreshToken: (data as any).refresh_token,
     expiresAt: (data as any).expires_at,
-    strava_athlete_id: (data as any).strava_athlete_id,
+    stravaAthleteId: (data as any).strava_athlete_id,
   };
 }
 

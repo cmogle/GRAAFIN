@@ -1,4 +1,4 @@
-import type { RaceResultRow } from '../types.js';
+import type { RaceResultRow } from '../storage/supabase.js';
 
 export interface AgeGradedResult {
   rawTime: string;

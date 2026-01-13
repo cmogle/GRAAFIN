@@ -104,24 +104,26 @@ export async function getCourseAdjustedTime(resultId: string): Promise<string | 
     .eq('id', resultId)
     .single();
 
-  if (!result || !result.finish_time || !result.event_id) {
+  const typedResult = result as { finish_time: string | null; event_id: string } | null;
+
+  if (!typedResult || !typedResult.finish_time || !typedResult.event_id) {
     return null;
   }
 
-  const cdi = await calculateCourseDifficulty(result.event_id);
+  const cdi = await calculateCourseDifficulty(typedResult.event_id);
   if (!cdi) {
-    return result.finish_time;
+    return typedResult.finish_time;
   }
 
   // Adjust time: if course is 5% harder, subtract 5% from time
-  const rawSeconds = parseTimeToSeconds(result.finish_time);
+  const rawSeconds = parseTimeToSeconds(typedResult.finish_time);
   if (rawSeconds === null) {
-    return result.finish_time;
+    return typedResult.finish_time;
   }
 
   // Negative difficulty = easier course = faster time, so subtract
   // Positive difficulty = harder course = slower time, so add
   const adjustedSeconds = rawSeconds * (1 - cdi.difficultyIndex / 100);
-  
+
   return formatTimeFromSeconds(adjustedSeconds);
 }

@@ -413,7 +413,7 @@ export async function getAllEventsWithSummary(): Promise<EventSummary[]> {
   }
 
   // Get result counts for each event
-  const eventIds = events.map(e => e.id);
+  const eventIds = (events as Array<{ id: string }>).map(e => e.id);
   const { data: results, error: resultsError } = await supabase
     .from('race_results')
     .select('event_id, created_at')
@@ -425,8 +425,9 @@ export async function getAllEventsWithSummary(): Promise<EventSummary[]> {
 
   // Aggregate results by event
   const resultCounts = new Map<string, { count: number; lastScrape: string | null }>();
-  
-  for (const result of results || []) {
+  const typedResults = (results || []) as Array<{ event_id: string; created_at: string }>;
+
+  for (const result of typedResults) {
     const eventId = result.event_id;
     const current = resultCounts.get(eventId) || { count: 0, lastScrape: null };
     current.count += 1;
@@ -437,7 +438,8 @@ export async function getAllEventsWithSummary(): Promise<EventSummary[]> {
   }
 
   // Combine event data with result counts
-  return events.map(event => ({
+  const typedEvents = events as Database['public']['Tables']['events']['Row'][];
+  return typedEvents.map(event => ({
     ...event,
     result_count: resultCounts.get(event.id)?.count || 0,
     last_scrape_time: resultCounts.get(event.id)?.lastScrape || event.scraped_at,
@@ -474,7 +476,8 @@ export async function getEventSchema(eventId: string): Promise<EventSchema> {
     };
   }
 
-  const total = results.length;
+  const typedResults = results as RaceResultRow[];
+  const total = typedResults.length;
   const fields = [
     { name: 'position', key: 'position' },
     { name: 'bib_number', key: 'bib_number' },
@@ -493,7 +496,7 @@ export async function getEventSchema(eventId: string): Promise<EventSchema> {
   ];
 
   const fieldStats = fields.map(field => {
-    const populated = results.filter(r => r[field.key as keyof typeof r] != null).length;
+    const populated = typedResults.filter(r => r[field.key as keyof RaceResultRow] != null).length;
     return {
       name: field.name,
       populated,
@@ -504,9 +507,9 @@ export async function getEventSchema(eventId: string): Promise<EventSchema> {
 
   // Extract unique distances from metadata
   const distances = new Set<string>();
-  results.forEach(r => {
+  typedResults.forEach(r => {
     if (r.metadata && typeof r.metadata === 'object' && 'distance' in r.metadata) {
-      const dist = String(r.metadata.distance);
+      const dist = String((r.metadata as Record<string, unknown>).distance);
       if (dist) distances.add(dist);
     }
   });
@@ -536,8 +539,10 @@ export async function checkEventDuplicate(eventName: string, eventDate: string):
     return null;
   }
 
+  const typedData = data as Event[];
+
   // Check if any event has a normalized name that matches
-  for (const event of data) {
+  for (const event of typedData) {
     const eventNormalizedName = normalizeName(event.event_name);
     if (eventNormalizedName === normalizedName) {
       return event;

@@ -299,6 +299,51 @@ export interface Database {
           consecutive_failures?: number;
         };
       };
+      profile_claims: {
+        Row: any;
+        Insert: any;
+        Update: any;
+      };
+      strava_links: {
+        Row: any;
+        Insert: any;
+        Update: any;
+      };
+      hidden_results: {
+        Row: any;
+        Insert: any;
+        Update: any;
+      };
+      athlete_merges: {
+        Row: any;
+        Insert: any;
+        Update: any;
+      };
+      leagues: {
+        Row: any;
+        Insert: any;
+        Update: any;
+      };
+      league_rankings: {
+        Row: any;
+        Insert: any;
+        Update: any;
+      };
+      watchlists: {
+        Row: any;
+        Insert: any;
+        Update: any;
+      };
+      watchlist_items: {
+        Row: any;
+        Insert: any;
+        Update: any;
+      };
+      watchlist_notifications: {
+        Row: any;
+        Insert: any;
+        Update: any;
+      };
     };
   };
 }

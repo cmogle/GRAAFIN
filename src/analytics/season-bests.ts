@@ -1,6 +1,5 @@
-import { getAthleteResults } from '../storage/supabase.js';
+import { getAthleteResults, type RaceResultRow } from '../storage/supabase.js';
 import { parseTimeToSeconds, formatTimeFromSeconds } from './age-grading.js';
-import type { RaceResultRow } from '../types.js';
 
 export interface SeasonBest {
   distance: string;
@@ -73,7 +72,7 @@ export async function calculateSeasonBests(
       }
     }
 
-    if (bestResult && bestSeconds !== null) {
+    if (bestResult && bestResult.finish_time && bestSeconds !== null) {
       // Check if this is an improvement over previous season
       const previousYear = targetYear - 1;
       const previousBest = await getBestTimeForDistance(athleteId, distance, previousYear);

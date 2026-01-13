@@ -1,6 +1,5 @@
-import { getAthleteResults } from '../storage/supabase.js';
+import { getAthleteResults, type RaceResultRow } from '../storage/supabase.js';
 import { parseTimeToSeconds } from './age-grading.js';
-import type { RaceResultRow } from '../types.js';
 
 export interface H2HStats {
   athlete1Id: string;
@@ -82,8 +81,8 @@ export async function calculateHeadToHead(
       eventId,
       eventName: 'Event', // TODO: Get event name from event_id
       date: result1.created_at,
-      athlete1Time: result1.finish_time,
-      athlete2Time: result2.finish_time,
+      athlete1Time: result1.finish_time!, // Non-null asserted (checked in filter)
+      athlete2Time: result2.finish_time!, // Non-null asserted (checked in filter)
       winner,
       gapSeconds: gap,
     });
