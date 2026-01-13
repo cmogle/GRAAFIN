@@ -87,6 +87,21 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
+/* Global link styling for dark theme */
+a {
+  color: var(--gold-primary);
+  text-decoration: none;
+  transition: color var(--transition-base);
+}
+
+a:hover {
+  color: var(--gold-light);
+}
+
+a:visited {
+  color: var(--gold-primary);
+}
+
 .container {
   max-width: 1200px;
   margin: 0 auto;
