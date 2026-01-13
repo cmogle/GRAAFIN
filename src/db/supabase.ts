@@ -102,6 +102,16 @@ export interface Database {
           time_15km: string | null;
           metadata: Record<string, unknown> | null;
           created_at: string;
+          // New fields from migration 009
+          distance_id: string | null;
+          gun_time: string | null;
+          chip_time: string | null;
+          time_behind: string | null;
+          age: number | null;
+          club: string | null;
+          status: string;
+          validated_at: string | null;
+          validation_errors: Record<string, unknown> | null;
         };
         Insert: {
           id?: string;
@@ -124,6 +134,16 @@ export interface Database {
           time_15km?: string | null;
           metadata?: Record<string, unknown> | null;
           created_at?: string;
+          // New fields from migration 009
+          distance_id?: string | null;
+          gun_time?: string | null;
+          chip_time?: string | null;
+          time_behind?: string | null;
+          age?: number | null;
+          club?: string | null;
+          status?: string;
+          validated_at?: string | null;
+          validation_errors?: Record<string, unknown> | null;
         };
         Update: {
           id?: string;
@@ -145,6 +165,163 @@ export interface Database {
           time_13km?: string | null;
           time_15km?: string | null;
           metadata?: Record<string, unknown> | null;
+          created_at?: string;
+          // New fields from migration 009
+          distance_id?: string | null;
+          gun_time?: string | null;
+          chip_time?: string | null;
+          time_behind?: string | null;
+          age?: number | null;
+          club?: string | null;
+          status?: string;
+          validated_at?: string | null;
+          validation_errors?: Record<string, unknown> | null;
+        };
+      };
+      // New tables from migration 009
+      timing_checkpoints: {
+        Row: {
+          id: string;
+          result_id: string;
+          checkpoint_type: string;
+          checkpoint_name: string;
+          checkpoint_order: number;
+          split_time: string | null;
+          cumulative_time: string | null;
+          pace: string | null;
+          segment_distance_meters: number | null;
+          metadata: Record<string, unknown> | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          result_id: string;
+          checkpoint_type: string;
+          checkpoint_name: string;
+          checkpoint_order: number;
+          split_time?: string | null;
+          cumulative_time?: string | null;
+          pace?: string | null;
+          segment_distance_meters?: number | null;
+          metadata?: Record<string, unknown> | null;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          result_id?: string;
+          checkpoint_type?: string;
+          checkpoint_name?: string;
+          checkpoint_order?: number;
+          split_time?: string | null;
+          cumulative_time?: string | null;
+          pace?: string | null;
+          segment_distance_meters?: number | null;
+          metadata?: Record<string, unknown> | null;
+          created_at?: string;
+        };
+      };
+      event_distances: {
+        Row: {
+          id: string;
+          event_id: string;
+          distance_name: string;
+          distance_meters: number;
+          race_type: string;
+          expected_checkpoints: string[] | null;
+          participant_count: number | null;
+          metadata: Record<string, unknown> | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          event_id: string;
+          distance_name: string;
+          distance_meters: number;
+          race_type?: string;
+          expected_checkpoints?: string[] | null;
+          participant_count?: number | null;
+          metadata?: Record<string, unknown> | null;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          event_id?: string;
+          distance_name?: string;
+          distance_meters?: number;
+          race_type?: string;
+          expected_checkpoints?: string[] | null;
+          participant_count?: number | null;
+          metadata?: Record<string, unknown> | null;
+          created_at?: string;
+        };
+      };
+      result_sources: {
+        Row: {
+          id: string;
+          result_id: string;
+          source_organiser: string;
+          source_url: string;
+          scraped_at: string;
+          fields_provided: string[];
+          confidence_score: number | null;
+          is_primary: boolean;
+          metadata: Record<string, unknown> | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          result_id: string;
+          source_organiser: string;
+          source_url: string;
+          scraped_at: string;
+          fields_provided: string[];
+          confidence_score?: number | null;
+          is_primary?: boolean;
+          metadata?: Record<string, unknown> | null;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          result_id?: string;
+          source_organiser?: string;
+          source_url?: string;
+          scraped_at?: string;
+          fields_provided?: string[];
+          confidence_score?: number | null;
+          is_primary?: boolean;
+          metadata?: Record<string, unknown> | null;
+          created_at?: string;
+        };
+      };
+      event_source_links: {
+        Row: {
+          id: string;
+          primary_event_id: string;
+          linked_event_id: string;
+          link_type: string;
+          link_confidence: number;
+          linked_by: string | null;
+          notes: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          primary_event_id: string;
+          linked_event_id: string;
+          link_type?: string;
+          link_confidence?: number;
+          linked_by?: string | null;
+          notes?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          primary_event_id?: string;
+          linked_event_id?: string;
+          link_type?: string;
+          link_confidence?: number;
+          linked_by?: string | null;
+          notes?: string | null;
           created_at?: string;
         };
       };

@@ -43,6 +43,7 @@
     "fuse.js": "^7.0.0",
     "jsonwebtoken": "^9.0.2",
     "node-cron": "^3.0.3",
+    "playwright": "^1.57.0",
     "twilio": "^5.0.0",
     "typescript": "5.3.3"
   },

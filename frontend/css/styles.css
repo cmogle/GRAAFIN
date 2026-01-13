@@ -210,6 +210,17 @@ a:visited {
   position: relative;
 }
 
+/* Invisible bridge on user-menu to prevent hover gap */
+.user-menu::after {
+  content: '';
+  position: absolute;
+  top: 100%;
+  right: 0;
+  width: 150px;
+  height: 4px;
+  z-index: calc(var(--z-header) + 1);
+}
+
 .user-btn {
   background: transparent;
   border: 1px solid var(--border-color);
@@ -241,6 +252,7 @@ a:visited {
   min-width: 150px;
   box-shadow: var(--shadow-lg);
   display: none;
+  z-index: var(--z-header);
 }
 
 /* Invisible bridge to prevent hover gap */
@@ -253,7 +265,8 @@ a:visited {
   height: 8px;
 }
 
-.user-menu:hover .user-dropdown {
+.user-menu:hover .user-dropdown,
+.user-dropdown:hover {
   display: block;
 }
 
