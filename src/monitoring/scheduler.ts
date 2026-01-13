@@ -39,6 +39,18 @@ export function startMonitoringScheduler(): void {
       console.error(`[Scheduler] Error checking watchlist notifications: ${errorMessage}`);
     }
   });
+
+  // Check scrape job retry queue every 5 minutes
+  cron.schedule('*/5 * * * *', async () => {
+    console.log('[Scheduler] Processing scrape job retry queue...');
+    try {
+      const { processRetryQueue } = await import('../jobs/scrape-retry-queue.js');
+      await processRetryQueue();
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      console.error(`[Scheduler] Error processing retry queue: ${errorMessage}`);
+    }
+  });
 }
 
 /**

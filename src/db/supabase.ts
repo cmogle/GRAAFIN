@@ -179,6 +179,10 @@ export interface Database {
           started_by: string | null;
           started_at: string;
           completed_at: string | null;
+          retry_count: number;
+          max_retries: number;
+          next_retry_at: string | null;
+          notification_sent: boolean;
         };
         Insert: {
           id?: string;
@@ -190,6 +194,10 @@ export interface Database {
           started_by?: string | null;
           started_at?: string;
           completed_at?: string | null;
+          retry_count?: number;
+          max_retries?: number;
+          next_retry_at?: string | null;
+          notification_sent?: boolean;
         };
         Update: {
           id?: string;
@@ -201,6 +209,10 @@ export interface Database {
           started_by?: string | null;
           started_at?: string;
           completed_at?: string | null;
+          retry_count?: number;
+          max_retries?: number;
+          next_retry_at?: string | null;
+          notification_sent?: boolean;
         };
       };
       monitored_endpoints: {

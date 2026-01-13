@@ -8,6 +8,11 @@ import {
   type ScrapeJob,
 } from '../storage/supabase.js';
 import type { ScrapedResults } from './organisers/base.js';
+import {
+  notifyScrapeJobComplete,
+  notifyScrapeJobFailed,
+} from '../notifications/scrape-notifications.js';
+import { scheduleRetry } from '../jobs/scrape-retry-queue.js';
 
 // Quick connectivity check using fetch (Node 18+)
 async function quickConnectivityCheck(url: string): Promise<boolean> {
@@ -127,6 +132,10 @@ export async function processScrapeJob(request: ScrapeJobRequest): Promise<Scrap
       resultsCount: totalResultsCount,
     });
 
+    // Send success notification
+    const eventName = existingEvent?.event_name || undefined;
+    await notifyScrapeJobComplete(completedJob, totalResultsCount, eventName);
+
     return {
       job: completedJob,
       eventId,
@@ -141,6 +150,16 @@ export async function processScrapeJob(request: ScrapeJobRequest): Promise<Scrap
       status: 'failed',
       errorMessage,
     });
+
+    // Schedule retry and send notification
+    const retryCount = failedJob.retry_count || 0;
+    const willRetry = retryCount < (failedJob.max_retries || 3);
+
+    if (willRetry) {
+      await scheduleRetry(failedJob.id, retryCount);
+    }
+
+    await notifyScrapeJobFailed(failedJob, errorMessage, willRetry, retryCount);
 
     throw new Error(`Scraping job failed: ${errorMessage}`);
   }

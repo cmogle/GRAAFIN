@@ -565,3 +565,89 @@ export async function getFailedScrapeJobs(): Promise<ScrapeJob[]> {
 
   return data || [];
 }
+
+/**
+ * Get jobs that are due for retry
+ * Finds failed jobs where next_retry_at <= now and retry_count < max_retries
+ */
+export async function getJobsForRetry(): Promise<ScrapeJob[]> {
+  const now = new Date().toISOString();
+
+  const { data, error } = await supabase
+    .from('scrape_jobs')
+    .select('*')
+    .eq('status', 'failed')
+    .lte('next_retry_at', now)
+    .lt('retry_count', 3) // max_retries default is 3
+    .order('next_retry_at', { ascending: true });
+
+  if (error) {
+    throw new Error(`Failed to get jobs for retry: ${error.message}`);
+  }
+
+  return data || [];
+}
+
+/**
+ * Schedule a job for retry with a specific retry time
+ */
+export async function scheduleJobRetry(
+  jobId: string,
+  nextRetryAt: Date,
+  retryCount: number
+): Promise<ScrapeJob> {
+  const { data, error } = await supabase
+    .from('scrape_jobs')
+    // @ts-ignore - Supabase type inference issue
+    .update({
+      next_retry_at: nextRetryAt.toISOString(),
+      retry_count: retryCount,
+    })
+    .eq('id', jobId)
+    .select()
+    .single();
+
+  if (error) {
+    throw new Error(`Failed to schedule job retry: ${error.message}`);
+  }
+
+  return data;
+}
+
+/**
+ * Mark a job's notification as sent
+ */
+export async function markJobNotificationSent(jobId: string): Promise<void> {
+  const { error } = await supabase
+    .from('scrape_jobs')
+    // @ts-ignore - Supabase type inference issue
+    .update({ notification_sent: true })
+    .eq('id', jobId);
+
+  if (error) {
+    throw new Error(`Failed to mark notification sent: ${error.message}`);
+  }
+}
+
+/**
+ * Reset a job for retry (set status back to pending)
+ */
+export async function resetJobForRetry(jobId: string): Promise<ScrapeJob> {
+  const { data, error } = await supabase
+    .from('scrape_jobs')
+    // @ts-ignore - Supabase type inference issue
+    .update({
+      status: 'running',
+      error_message: null,
+      completed_at: null,
+    })
+    .eq('id', jobId)
+    .select()
+    .single();
+
+  if (error) {
+    throw new Error(`Failed to reset job for retry: ${error.message}`);
+  }
+
+  return data;
+}
