@@ -215,15 +215,27 @@ body {
 
 .user-dropdown {
   position: absolute;
-  top: calc(100% + var(--spacing-xs));
+  top: 100%;
   right: 0;
   background: var(--bg-card);
   border: 1px solid var(--border-color);
   border-radius: 8px;
   padding: var(--spacing-xs);
+  padding-top: calc(var(--spacing-xs) + 4px);
+  margin-top: 4px;
   min-width: 150px;
   box-shadow: var(--shadow-lg);
   display: none;
+}
+
+/* Invisible bridge to prevent hover gap */
+.user-dropdown::before {
+  content: '';
+  position: absolute;
+  top: -8px;
+  left: 0;
+  right: 0;
+  height: 8px;
 }
 
 .user-menu:hover .user-dropdown {
