@@ -2,6 +2,22 @@
 
 ## Where we are now
 
+## Environment variables
+
+**Supabase (required for app + auth):**
+
+- `NEXT_PUBLIC_SUPABASE_URL` — project URL (e.g. `https://<project-ref>.supabase.co`)
+- `NEXT_PUBLIC_SUPABASE_ANON_KEY` — public anon key (safe for client; RLS enforces security)
+
+**Strava sync (for manual sync / webhook):**
+
+- `STRAVA_SYNC_WEBHOOK_URL` — URL of the sync endpoint to call
+- `STRAVA_SYNC_WEBHOOK_TOKEN` — shared secret for the request
+
+**Local dev:** Vercel env vars are only used on Vercel. For `npm run dev` on localhost, use a `.env.local` file in the repo root with the same variable names (see `.env.example` for a template). Do not commit `.env.local`.
+
+## Completed
+
 ### Product progress
 - Dashboard upgraded to an insight-led layout (not just KPI/table)
 - Run-type evolution now compares by **distance bands** (e.g. 28–32km)
