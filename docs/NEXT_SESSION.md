@@ -1,46 +1,68 @@
-# Next Session Handoff
+# Next Session Handoff (Fresh)
 
-## Completed
+## Where we are now
 
-- Repo reset to clean slate and archived old code by tag
-- Next.js scaffold in place
-- Auth plumbing + protected routes
-- Live dashboard reads from Supabase
-- Query API (safe templates)
-- Manual sync trigger button and endpoint
-- **Screen design pass applied across core routes**
-  - Updated shell/nav visual system
-  - Refreshed `/dashboard`, `/query`, `/plan`, `/alerts`, `/profile`
-  - Added cleaner cards, spacing, CTA hierarchy, and table styling
+### Product progress
+- Dashboard upgraded to an insight-led layout (not just KPI/table)
+- Run-type evolution now compares by **distance bands** (e.g. 28–32km)
+- Marathon block analysis includes **interactive block explorer**
+- July 2025 marathon-distance anomaly is excluded from race-block logic
+- Activity detail page now auto-shows:
+  - same-category comparison
+  - all-history vs last-12-month toggle
+  - cache badge (cached vs fresh)
 
-## Immediate next priorities
+### Data/API progress
+- `/api/query` supports:
+  - run-specific comparison via `runId`
+  - marathon-block pattern query
+  - existing weekly/14-day templates
+- Added optional cache table SQL:
+  - `docs/SUPABASE_RUN_INSIGHT_CACHE.sql`
+- Added architecture proposal:
+  - `docs/RUN_INSIGHTS_ARCHITECTURE.md`
 
-1. **Training plan schema + persistence**
-   - Add tables:
-     - `training_objectives`
-     - `training_plans`
-     - `training_plan_workouts`
-   - Replace current `/plan` placeholders + sample rows with real CRUD
+### Build status
+- `npm run build` passes
+- lint has only pre-existing warnings in `src/app/layout.tsx`
 
-2. **Readiness + alerts logic**
-   - Compute weekly readiness score from Strava + plan
-   - Populate `/alerts` from real calculations instead of static examples
+---
 
-3. **Wire real Strava sync endpoint**
-   - Build/deploy endpoint in `strava-sync` (or existing service) to accept trigger
-   - Configure:
-     - `STRAVA_SYNC_WEBHOOK_URL`
-     - `STRAVA_SYNC_WEBHOOK_TOKEN`
+## Priority for next session
 
-4. **Query capability expansion**
-   - Add 8-10 safe whitelisted templates
-   - Return chart-friendly payloads for richer frontend rendering
+## 1) Training Plan persistence (highest remaining gap)
+Implement real schema + CRUD (replace placeholder plan page):
+- `training_objectives`
+- `training_plans`
+- `training_plan_workouts`
 
-## Suggested first command in new session
+Then wire `/plan` to real data and actions (create/edit/delete workouts).
+
+## 2) Readiness + Alerts from real calculations
+Replace static alert placeholders with computed signals:
+- readiness score
+- load spike / recovery status
+- trend-aware risk flags
+
+## 3) Harden insight caching
+- Add cache TTL/invalidation policy
+- Add cleanup job for stale cache rows
+- Optionally pre-warm cache for latest N runs after sync
+
+## 4) Run detail polish
+- Add mini trend chart for selected run vs comparable peers
+- Add “best in band / recent median / this run” compact panel
+
+## 5) Query template expansion
+Add 6–8 safe templates with chart-ready payloads.
+
+---
+
+## Suggested first commands
 
 ```bash
 cd /home/monkey/.openclaw/workspace/GRAAFIN
 npm run dev
 ```
 
-Then move straight into schema + persistence for the Plan page.
+Then begin with training plan schema + `/plan` CRUD.
