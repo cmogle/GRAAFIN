@@ -1,7 +1,9 @@
 import { AppShell } from "@/components/app-shell";
 import { KpiCard } from "@/components/kpi-card";
 import { SectionCard } from "@/components/section-card";
+import { SyncTriggerButton } from "@/components/sync-trigger-button";
 import { createClient } from "@/lib/supabase/server";
+import { getStravaStatus } from "@/lib/strava";
 
 function formatPace(secondsPerKm: number) {
   const min = Math.floor(secondsPerKm / 60);
@@ -13,6 +15,7 @@ function formatPace(secondsPerKm: number) {
 
 export default async function DashboardPage() {
   const supabase = await createClient();
+  const status = await getStravaStatus();
 
   const now = new Date();
   const weekAgo = new Date(now);
@@ -33,6 +36,10 @@ export default async function DashboardPage() {
     : 0;
   const pace = avgSpeed > 0 ? formatPace(1000 / avgSpeed) : "--";
 
+  const latestSummary = status.latestActivity
+    ? `${status.latestActivity.type}: ${status.latestActivity.name} • ${(status.latestActivity.distanceM / 1000).toFixed(1)} km`
+    : "No activities found yet.";
+
   return (
     <AppShell>
       <div>
@@ -41,11 +48,26 @@ export default async function DashboardPage() {
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <KpiCard
+          label="Strava Connection"
+          value={status.connected ? "Connected" : "Not connected"}
+          sub={status.connected ? "Data available" : "No activity rows"}
+          status={status.connected ? "green" : "red"}
+        />
         <KpiCard label="Weekly Distance" value={`${weeklyDistanceKm.toFixed(1)} km`} sub="Live" status="green" />
         <KpiCard label="Run Count" value={`${runCount}`} sub="Live" status="green" />
         <KpiCard label="Avg Pace" value={pace} sub="Rolling 7d" status="neutral" />
-        <KpiCard label="Readiness" value="Pending" sub="Score model next" status="yellow" />
       </div>
+
+      <SectionCard title="Sync Status & Manual Trigger">
+        <div className="space-y-2 text-sm text-slate-700">
+          <p>
+            Last successful sync: {status.lastSuccessfulSyncAt ? new Date(status.lastSuccessfulSyncAt).toLocaleString() : "Unknown"}
+          </p>
+          <p>Latest activity: {latestSummary}</p>
+          <SyncTriggerButton />
+        </div>
+      </SectionCard>
 
       <div className="grid gap-4 xl:grid-cols-3">
         <div className="xl:col-span-2">
