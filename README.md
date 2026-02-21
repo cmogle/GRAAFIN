@@ -1,6 +1,20 @@
-# GRAAFIN
+# GRAAFIN (MVP scaffold)
 
-Clean-slate start for the new MVP app.
+Next.js scaffold for Fionnuala's Strava + training-plan MVP.
 
-Archived previous project state is preserved via git tag:
-- See tags matching `archive/pre-clean-slate-*`
+## Quickstart
+
+```bash
+npm install
+cp .env.example .env.local
+npm run dev
+```
+
+## Routes
+- /login
+- /dashboard
+- /query
+- /plan
+- /alerts
+- /profile
+- /api/health
