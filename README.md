@@ -38,6 +38,20 @@ npm run dev
 
 See `.env.example` and `docs/SETUP.md`.
 
+## Database setup
+
+To enable `/plan` persistence, run:
+
+- `docs/SUPABASE_TRAINING_PLAN_SCHEMA.sql`
+
+This SQL file creates:
+
+- `training_objectives`
+- `training_plans`
+- `training_plan_workouts`
+
+It also enables row-level security for authenticated users, adds indexes, and adds `updated_at` triggers.
+
 ## Handoff
 
 See `docs/NEXT_SESSION.md` for immediate next tasks.
