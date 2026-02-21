@@ -1,6 +1,89 @@
 import { AppShell } from "@/components/app-shell";
 import { KpiCard } from "@/components/kpi-card";
 import { SectionCard } from "@/components/section-card";
-export default function DashboardPage() {
-  return <AppShell><div><h1 className="text-2xl font-semibold text-slate-900">Hi Fionnuala 👋</h1><p className="text-slate-600">Am I on track this week?</p></div><div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4"><KpiCard label="Weekly Distance" value="48 / 55 km" sub="At risk" status="yellow" /><KpiCard label="Run Count" value="4 / 5" sub="On track" status="green" /><KpiCard label="Readiness" value="72" sub="Yellow" status="yellow" /><KpiCard label="Long Run" value="24 / 28 km" sub="Behind" status="red" /></div><div className="grid gap-4 xl:grid-cols-3"><div className="xl:col-span-2"><SectionCard title="Plan Compliance Trend"><div className="h-64 rounded-xl border border-dashed border-slate-300 bg-slate-50" /></SectionCard></div><SectionCard title="Coaching Alerts"><ul className="space-y-2 text-sm text-slate-700"><li className="rounded-lg bg-amber-50 p-2">Intensity creep detected in the last 5 days.</li><li className="rounded-lg bg-red-50 p-2">Long run shortfall: 4km behind target.</li></ul></SectionCard></div><SectionCard title="Recent Activities"><div className="text-sm text-slate-600">Table placeholder (date, type, distance, pace, HR, matched plan, status).</div></SectionCard></AppShell>;
+import { createClient } from "@/lib/supabase/server";
+
+function formatPace(secondsPerKm: number) {
+  const min = Math.floor(secondsPerKm / 60);
+  const sec = Math.round(secondsPerKm % 60)
+    .toString()
+    .padStart(2, "0");
+  return `${min}:${sec}/km`;
+}
+
+export default async function DashboardPage() {
+  const supabase = await createClient();
+
+  const now = new Date();
+  const weekAgo = new Date(now);
+  weekAgo.setDate(now.getDate() - 7);
+
+  const { data: weeklyRuns } = await supabase
+    .from("strava_activities")
+    .select("id,distance_m,moving_time_s,average_speed,start_date,name")
+    .eq("type", "Run")
+    .gte("start_date", weekAgo.toISOString())
+    .order("start_date", { ascending: false });
+
+  const runs = weeklyRuns ?? [];
+  const weeklyDistanceKm = runs.reduce((sum, r) => sum + ((r.distance_m as number) || 0), 0) / 1000;
+  const runCount = runs.length;
+  const avgSpeed = runs.length
+    ? runs.reduce((sum, r) => sum + ((r.average_speed as number) || 0), 0) / runs.length
+    : 0;
+  const pace = avgSpeed > 0 ? formatPace(1000 / avgSpeed) : "--";
+
+  return (
+    <AppShell>
+      <div>
+        <h1 className="text-2xl font-semibold text-slate-900">Hi Fionnuala 👋</h1>
+        <p className="text-slate-600">Live data from Supabase Strava runs (last 7 days).</p>
+      </div>
+
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <KpiCard label="Weekly Distance" value={`${weeklyDistanceKm.toFixed(1)} km`} sub="Live" status="green" />
+        <KpiCard label="Run Count" value={`${runCount}`} sub="Live" status="green" />
+        <KpiCard label="Avg Pace" value={pace} sub="Rolling 7d" status="neutral" />
+        <KpiCard label="Readiness" value="Pending" sub="Score model next" status="yellow" />
+      </div>
+
+      <div className="grid gap-4 xl:grid-cols-3">
+        <div className="xl:col-span-2">
+          <SectionCard title="Plan Compliance Trend">
+            <div className="h-64 rounded-xl border border-dashed border-slate-300 bg-slate-50" />
+          </SectionCard>
+        </div>
+        <SectionCard title="Coaching Alerts">
+          <ul className="space-y-2 text-sm text-slate-700">
+            <li className="rounded-lg bg-amber-50 p-2">Automated alerts will appear here after plan tables are added.</li>
+          </ul>
+        </SectionCard>
+      </div>
+
+      <SectionCard title="Recent Activities (live)">
+        <div className="overflow-x-auto">
+          <table className="min-w-full text-left text-sm">
+            <thead className="text-slate-500">
+              <tr>
+                <th className="px-2 py-2">Date</th>
+                <th className="px-2 py-2">Run</th>
+                <th className="px-2 py-2">Distance</th>
+                <th className="px-2 py-2">Moving Time</th>
+              </tr>
+            </thead>
+            <tbody>
+              {runs.slice(0, 10).map((run) => (
+                <tr key={run.id as string} className="border-t border-slate-100">
+                  <td className="px-2 py-2">{new Date(run.start_date as string).toLocaleDateString()}</td>
+                  <td className="px-2 py-2">{(run.name as string) ?? "Run"}</td>
+                  <td className="px-2 py-2">{(((run.distance_m as number) || 0) / 1000).toFixed(1)} km</td>
+                  <td className="px-2 py-2">{Math.round((((run.moving_time_s as number) || 0) / 60))} min</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </SectionCard>
+    </AppShell>
+  );
 }
