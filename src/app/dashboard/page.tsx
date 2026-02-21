@@ -42,9 +42,9 @@ export default async function DashboardPage() {
 
   return (
     <AppShell>
-      <div>
+      <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
         <h1 className="text-2xl font-semibold text-slate-900">Hi Fionnuala 👋</h1>
-        <p className="text-slate-600">Live data from Supabase Strava runs (last 7 days).</p>
+        <p className="mt-1 text-sm text-slate-600">Weekly training snapshot powered by live Strava data in Supabase.</p>
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
@@ -55,34 +55,31 @@ export default async function DashboardPage() {
           status={status.connected ? "green" : "red"}
         />
         <KpiCard label="Weekly Distance" value={`${weeklyDistanceKm.toFixed(1)} km`} sub="Live" status="green" />
-        <KpiCard label="Run Count" value={`${runCount}`} sub="Live" status="green" />
+        <KpiCard label="Run Count" value={`${runCount}`} sub="Rolling 7d" status="neutral" />
         <KpiCard label="Avg Pace" value={pace} sub="Rolling 7d" status="neutral" />
       </div>
 
-      <SectionCard title="Sync Status & Manual Trigger">
-        <div className="space-y-2 text-sm text-slate-700">
-          <p>
-            Last successful sync: {status.lastSuccessfulSyncAt ? new Date(status.lastSuccessfulSyncAt).toLocaleString() : "Unknown"}
-          </p>
-          <p>Latest activity: {latestSummary}</p>
-          <SyncTriggerButton />
-        </div>
-      </SectionCard>
-
       <div className="grid gap-4 xl:grid-cols-3">
         <div className="xl:col-span-2">
-          <SectionCard title="Plan Compliance Trend">
-            <div className="h-64 rounded-xl border border-dashed border-slate-300 bg-slate-50" />
+          <SectionCard title="Sync status">
+            <div className="space-y-2 text-sm text-slate-700">
+              <p>
+                Last successful sync:{" "}
+                {status.lastSuccessfulSyncAt ? new Date(status.lastSuccessfulSyncAt).toLocaleString() : "Unknown"}
+              </p>
+              <p>Latest activity: {latestSummary}</p>
+              <SyncTriggerButton />
+            </div>
           </SectionCard>
         </div>
-        <SectionCard title="Coaching Alerts">
+        <SectionCard title="Coaching alerts">
           <ul className="space-y-2 text-sm text-slate-700">
-            <li className="rounded-lg bg-amber-50 p-2">Automated alerts will appear here after plan tables are added.</li>
+            <li className="rounded-xl bg-amber-50 p-3">Automated alerts will appear here after readiness logic is wired.</li>
           </ul>
         </SectionCard>
       </div>
 
-      <SectionCard title="Recent Activities (live)">
+      <SectionCard title="Recent activities (live)">
         <div className="overflow-x-auto">
           <table className="min-w-full text-left text-sm">
             <thead className="text-slate-500">
