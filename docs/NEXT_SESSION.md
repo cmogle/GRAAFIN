@@ -8,39 +8,33 @@
 - Live dashboard reads from Supabase
 - Query API (safe templates)
 - Manual sync trigger button and endpoint
+- **Screen design pass applied across core routes**
+  - Updated shell/nav visual system
+  - Refreshed `/dashboard`, `/query`, `/plan`, `/alerts`, `/profile`
+  - Added cleaner cards, spacing, CTA hierarchy, and table styling
 
 ## Immediate next priorities
 
-1. **Wire real Strava sync endpoint**
+1. **Training plan schema + persistence**
+   - Add tables:
+     - `training_objectives`
+     - `training_plans`
+     - `training_plan_workouts`
+   - Replace current `/plan` placeholders + sample rows with real CRUD
+
+2. **Readiness + alerts logic**
+   - Compute weekly readiness score from Strava + plan
+   - Populate `/alerts` from real calculations instead of static examples
+
+3. **Wire real Strava sync endpoint**
    - Build/deploy endpoint in `strava-sync` (or existing service) to accept trigger
    - Configure:
      - `STRAVA_SYNC_WEBHOOK_URL`
      - `STRAVA_SYNC_WEBHOOK_TOKEN`
 
-2. **Screen design pass (high priority)**
-   - Use v0 prompts already prepared in prior session
-   - Export component/layout decisions
-   - Apply to routes:
-     - `/dashboard`
-     - `/query`
-     - `/plan`
-     - `/alerts`
-     - `/profile`
-
-3. **Training plan schema + persistence**
-   - Add tables:
-     - `training_objectives`
-     - `training_plans`
-     - `training_plan_workouts`
-   - Replace placeholders in `/plan`
-
-4. **Readiness + alerts logic**
-   - Compute weekly readiness score from Strava + plan
-   - Populate `/alerts` from real calculations
-
-5. **Query capability expansion**
+4. **Query capability expansion**
    - Add 8-10 safe whitelisted templates
-   - Return chart-friendly payloads
+   - Return chart-friendly payloads for richer frontend rendering
 
 ## Suggested first command in new session
 
@@ -49,4 +43,4 @@ cd /home/monkey/.openclaw/workspace/GRAAFIN
 npm run dev
 ```
 
-Then start with design implementation using v0-generated components.
+Then move straight into schema + persistence for the Plan page.

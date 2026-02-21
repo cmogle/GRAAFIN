@@ -3,153 +3,73 @@
 import { useState } from "react";
 import { AppShell } from "@/components/app-shell";
 import { SectionCard } from "@/components/section-card";
-import { Send, BarChart3, Activity, CheckCircle2 } from "lucide-react";
-import { cn } from "@/lib/utils";
 
 const quickPrompts = [
   "Am I on track this week?",
   "How much did I run in the last 14 days?",
   "How many easy runs vs workouts this month?",
-  "Which sessions had highest HR drift?",
+  "Which sessions had the highest heart rate drift?",
 ];
 
 export default function QueryPage() {
-  const [query, setQuery] = useState("");
-  const [answer, setAnswer] = useState<string>(
-    "Ask a question about your training data and I will return live insights."
-  );
+  const [query, setQuery] = useState(quickPrompts[0]);
+  const [answer, setAnswer] = useState<string>("Ask about this week or last 14 days.");
   const [loading, setLoading] = useState(false);
 
-  const ask = async (q?: string) => {
-    const questionText = q ?? query;
-    if (!questionText.trim()) return;
-    setQuery(questionText);
+  const ask = async () => {
     setLoading(true);
-    setAnswer("");
-    try {
-      const res = await fetch("/api/query", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ query: questionText }),
-      });
-      const data = await res.json();
-      setAnswer(data.summary ?? data.error ?? "No response");
-    } catch {
-      setAnswer("Something went wrong. Please try again.");
-    } finally {
-      setLoading(false);
-    }
+    const res = await fetch("/api/query", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ query }),
+    });
+    const data = await res.json();
+    setAnswer(data.summary ?? data.error ?? "No response");
+    setLoading(false);
   };
 
   return (
     <AppShell>
       <div>
-        <h1 className="text-2xl font-semibold text-foreground">Query Coach</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Natural-language analytics for your training data.
-        </p>
+        <h1 className="text-2xl font-semibold text-slate-900">Query Coach</h1>
+        <p className="mt-1 text-sm text-slate-600">Natural language Q&A against safe templates and your synced run data.</p>
       </div>
 
-      <div className="grid gap-4 xl:grid-cols-2">
-        {/* Question panel */}
+      <div className="grid gap-4 xl:grid-cols-3">
         <SectionCard title="Ask a question">
-          <div className="flex flex-col gap-4">
+          <div className="space-y-4">
             <textarea
-              className="min-h-[100px] w-full resize-none rounded-xl border border-border bg-background px-4 py-3 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring/30"
+              className="h-32 w-full rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none ring-blue-100 placeholder:text-slate-400 focus:ring-2"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder="Ask about your training..."
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && !e.shiftKey) {
-                  e.preventDefault();
-                  ask();
-                }
-              }}
             />
             <button
-              onClick={() => ask()}
-              disabled={loading || !query.trim()}
-              className="inline-flex w-fit items-center gap-2 rounded-lg bg-accent px-5 py-2.5 text-sm font-medium text-accent-foreground transition-opacity disabled:opacity-50"
+              onClick={ask}
+              className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-slate-800 disabled:opacity-60"
+              disabled={loading}
             >
-              <Send className="h-4 w-4" />
-              {loading ? "Running..." : "Run query"}
+              {loading ? "Running query..." : "Run query"}
             </button>
-
-            <div className="flex flex-col gap-2">
-              <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                Quick prompts
-              </span>
-              <div className="flex flex-wrap gap-2">
-                {quickPrompts.map((prompt) => (
-                  <button
-                    key={prompt}
-                    onClick={() => ask(prompt)}
-                    disabled={loading}
-                    className="rounded-full bg-muted px-3 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-accent-muted hover:text-accent disabled:opacity-50"
-                  >
-                    {prompt}
-                  </button>
-                ))}
-              </div>
+            <div className="flex flex-wrap gap-2">
+              {quickPrompts.map((prompt) => (
+                <button
+                  key={prompt}
+                  onClick={() => setQuery(prompt)}
+                  className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs text-slate-600 hover:bg-slate-100"
+                >
+                  {prompt}
+                </button>
+              ))}
             </div>
           </div>
         </SectionCard>
 
-        {/* Answer panel */}
-        <SectionCard title="Coach Answer">
-          <div className="flex flex-col gap-4">
-            <div
-              className={cn(
-                "min-h-[100px] rounded-xl border border-border bg-background p-4 text-sm leading-relaxed",
-                loading
-                  ? "animate-pulse text-muted-foreground"
-                  : "text-foreground"
-              )}
-            >
-              {loading ? "Thinking..." : answer}
-            </div>
-
-            {/* Placeholder metrics */}
-            <div className="grid grid-cols-3 gap-3">
-              <div className="flex items-center gap-2 rounded-lg bg-muted p-3">
-                <Activity className="h-4 w-4 text-accent" />
-                <div>
-                  <div className="text-xs text-muted-foreground">Distance</div>
-                  <div className="text-sm font-semibold text-foreground">
-                    --
-                  </div>
-                </div>
-              </div>
-              <div className="flex items-center gap-2 rounded-lg bg-muted p-3">
-                <BarChart3 className="h-4 w-4 text-accent" />
-                <div>
-                  <div className="text-xs text-muted-foreground">Sessions</div>
-                  <div className="text-sm font-semibold text-foreground">
-                    --
-                  </div>
-                </div>
-              </div>
-              <div className="flex items-center gap-2 rounded-lg bg-muted p-3">
-                <CheckCircle2 className="h-4 w-4 text-accent" />
-                <div>
-                  <div className="text-xs text-muted-foreground">
-                    Compliance
-                  </div>
-                  <div className="text-sm font-semibold text-foreground">
-                    --
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Placeholder chart area */}
-            <div className="flex h-40 items-center justify-center rounded-xl border border-dashed border-border bg-muted/50">
-              <span className="text-xs text-muted-foreground">
-                Chart visualization area (coming soon)
-              </span>
-            </div>
-          </div>
-        </SectionCard>
+        <div className="xl:col-span-2">
+          <SectionCard title="Coach answer">
+            <p className="whitespace-pre-wrap text-sm leading-6 text-slate-700">{answer}</p>
+          </SectionCard>
+        </div>
       </div>
     </AppShell>
   );

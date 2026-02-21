@@ -1,25 +1,9 @@
 import { ReactNode } from "react";
-import { cn } from "@/lib/utils";
 
-export function SectionCard({
-  title,
-  children,
-  className,
-}: {
-  title: string;
-  children: ReactNode;
-  className?: string;
-}) {
+export function SectionCard({ title, children }: { title: string; children: ReactNode }) {
   return (
-    <section
-      className={cn(
-        "rounded-2xl border border-border bg-card p-5 shadow-sm",
-        className
-      )}
-    >
-      <h3 className="mb-4 text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-        {title}
-      </h3>
+    <section className="rounded-3xl border border-slate-200/80 bg-white p-5 shadow-sm">
+      <h3 className="mb-4 text-base font-semibold text-slate-900">{title}</h3>
       {children}
     </section>
   );
