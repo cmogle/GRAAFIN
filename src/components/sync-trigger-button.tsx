@@ -1,6 +1,8 @@
 "use client";
 
 import { useState } from "react";
+import { RefreshCw } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 type Result = {
   ok?: boolean;
@@ -27,18 +29,26 @@ export function SyncTriggerButton() {
   };
 
   return (
-    <div className="space-y-2">
+    <div className="flex flex-col gap-2">
       <button
         onClick={trigger}
         disabled={loading}
-        className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-60"
+        className={cn(
+          "inline-flex w-fit items-center gap-2 rounded-lg bg-accent px-4 py-2 text-sm font-medium text-accent-foreground transition-opacity disabled:opacity-60"
+        )}
       >
-        {loading ? "Triggering..." : "Run manual sync"}
+        <RefreshCw className={cn("h-4 w-4", loading && "animate-spin")} />
+        {loading ? "Triggering..." : "Trigger Sync"}
       </button>
-      {result?.message ? <p className="text-sm text-slate-600">{result.message}</p> : null}
-      {result?.lastSuccessfulSyncAt ? (
-        <p className="text-xs text-slate-500">Last successful sync: {new Date(result.lastSuccessfulSyncAt).toLocaleString()}</p>
-      ) : null}
+      {result?.message && (
+        <p className="text-sm text-muted-foreground">{result.message}</p>
+      )}
+      {result?.lastSuccessfulSyncAt && (
+        <p className="text-xs text-muted-foreground">
+          Last successful sync:{" "}
+          {new Date(result.lastSuccessfulSyncAt).toLocaleString()}
+        </p>
+      )}
     </div>
   );
 }
