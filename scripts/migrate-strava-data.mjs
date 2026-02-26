@@ -99,6 +99,7 @@ async function fetchAllRows({
 }) {
   let workingOrder = orderCandidates[0];
   let validated = false;
+  let lastValidationError = null;
   const rows = [];
 
   for (const candidate of orderCandidates) {
@@ -114,13 +115,15 @@ async function fetchAllRows({
       workingOrder = candidate;
       validated = true;
       break;
-    } catch {
-      // try next order expression
+    } catch (error) {
+      lastValidationError = error;
     }
   }
 
   if (!validated) {
-    throw new Error(`Unable to query ${table}; order clauses failed.`);
+    const detail =
+      lastValidationError instanceof Error ? ` ${lastValidationError.message}` : "";
+    throw new Error(`Unable to query ${table}; order clauses failed.${detail}`);
   }
 
   let start = 0;
@@ -200,20 +203,28 @@ async function main() {
   const targetKey = requireEnv("TARGET_SUPABASE_SERVICE_ROLE_KEY");
   const batchSize = Number(process.env.MIGRATION_BATCH_SIZE || 500);
   const dryRun = parseBool("MIGRATION_DRY_RUN", false);
+  const sourceActivityTable = process.env.SOURCE_ACTIVITY_TABLE?.trim() || "strava_activities";
+  const sourceSyncStateTable = process.env.SOURCE_SYNC_STATE_TABLE?.trim() || "strava_sync_state";
+  const targetActivityTable = process.env.TARGET_ACTIVITY_TABLE?.trim() || "strava_activities";
+  const targetSyncStateTable = process.env.TARGET_SYNC_STATE_TABLE?.trim() || "strava_sync_state";
 
   console.log(`[info] source project: ${projectRefFromUrl(sourceUrl)}`);
   console.log(`[info] target project: ${projectRefFromUrl(targetUrl)}`);
   console.log(`[info] batch size: ${batchSize}`);
+  console.log(`[info] source activity table: ${sourceActivityTable}`);
+  console.log(`[info] source sync-state table: ${sourceSyncStateTable}`);
+  console.log(`[info] target activity table: ${targetActivityTable}`);
+  console.log(`[info] target sync-state table: ${targetSyncStateTable}`);
   if (dryRun) console.log("[info] dry run enabled (no writes)");
 
   const activities = await fetchAllRows({
     baseUrl: sourceUrl,
     apiKey: sourceKey,
-    table: "strava_activities",
+    table: sourceActivityTable,
     batchSize,
     orderCandidates: ["start_date.asc,id.asc", "id.asc", "created_at.asc"],
   });
-  console.log(`[info] fetched strava_activities: ${activities.length}`);
+  console.log(`[info] fetched ${sourceActivityTable}: ${activities.length}`);
 
   if (!dryRun && activities.length) {
     for (let i = 0; i < activities.length; i += batchSize) {
@@ -221,40 +232,40 @@ async function main() {
       await upsertRows({
         baseUrl: targetUrl,
         apiKey: targetKey,
-        table: "strava_activities",
+        table: targetActivityTable,
         rows: chunk,
         onConflict: "id",
       });
-      console.log(`[info] upserted strava_activities ${i + 1}-${i + chunk.length}`);
+      console.log(`[info] upserted ${targetActivityTable} ${i + 1}-${i + chunk.length}`);
     }
   }
 
   const syncStateRows = await fetchAllRows({
     baseUrl: sourceUrl,
     apiKey: sourceKey,
-    table: "strava_sync_state",
+    table: sourceSyncStateTable,
     batchSize: Math.min(batchSize, 250),
     orderCandidates: ["updated_at.asc", "last_success_at.asc", "created_at.asc", "id.asc"],
   });
-  console.log(`[info] fetched strava_sync_state: ${syncStateRows.length}`);
+  console.log(`[info] fetched ${sourceSyncStateTable}: ${syncStateRows.length}`);
 
   if (!dryRun && syncStateRows.length) {
     const allHaveId = syncStateRows.every((row) => Object.prototype.hasOwnProperty.call(row, "id") && row.id != null);
     await upsertRows({
       baseUrl: targetUrl,
       apiKey: targetKey,
-      table: "strava_sync_state",
+      table: targetSyncStateTable,
       rows: syncStateRows,
       onConflict: allHaveId ? "id" : "",
     });
-    console.log(`[info] migrated strava_sync_state rows: ${syncStateRows.length}`);
+    console.log(`[info] migrated ${targetSyncStateTable} rows: ${syncStateRows.length}`);
   }
 
   const [sourceActivityCount, targetActivityCount, sourceSyncCount, targetSyncCount] = await Promise.all([
-    countRows({ baseUrl: sourceUrl, apiKey: sourceKey, table: "strava_activities" }),
-    countRows({ baseUrl: targetUrl, apiKey: targetKey, table: "strava_activities" }),
-    countRows({ baseUrl: sourceUrl, apiKey: sourceKey, table: "strava_sync_state" }),
-    countRows({ baseUrl: targetUrl, apiKey: targetKey, table: "strava_sync_state" }),
+    countRows({ baseUrl: sourceUrl, apiKey: sourceKey, table: sourceActivityTable }),
+    countRows({ baseUrl: targetUrl, apiKey: targetKey, table: targetActivityTable }),
+    countRows({ baseUrl: sourceUrl, apiKey: sourceKey, table: sourceSyncStateTable }),
+    countRows({ baseUrl: targetUrl, apiKey: targetKey, table: targetSyncStateTable }),
   ]);
 
   console.log("[done] migration summary");
