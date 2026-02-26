@@ -23,7 +23,28 @@ type MessageRow = {
 };
 
 function tableMissingMessage(error: unknown) {
-  const message = error instanceof Error ? error.message : String(error);
+  const message =
+    error instanceof Error
+      ? error.message
+      : typeof error === "string"
+        ? error
+        : (() => {
+            if (error && typeof error === "object") {
+              const record = error as Record<string, unknown>;
+              const parts = [
+                typeof record.message === "string" ? record.message : "",
+                typeof record.details === "string" ? record.details : "",
+                typeof record.hint === "string" ? record.hint : "",
+              ].filter(Boolean);
+              if (parts.length > 0) return parts.join(" ");
+              try {
+                return JSON.stringify(error);
+              } catch {
+                return String(error);
+              }
+            }
+            return String(error);
+          })();
   if (message.toLowerCase().includes("does not exist") || message.includes("42P01")) {
     return "Coach tables are not installed. Run docs/SUPABASE_COACH_SCHEMA.sql in Supabase.";
   }

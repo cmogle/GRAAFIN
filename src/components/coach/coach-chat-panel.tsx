@@ -135,7 +135,10 @@ export function CoachChatPanel() {
         }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data?.error ?? "Coach request failed");
+      if (!res.ok) {
+        const normalizedError = normalizeContent(data?.error ?? data?.message ?? data);
+        throw new Error(normalizedError || "Coach request failed");
+      }
 
       const assistant: ChatMessage = {
         id: String(data.assistantMessageId ?? `assistant-${Date.now()}`),
