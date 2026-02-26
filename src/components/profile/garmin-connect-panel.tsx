@@ -118,6 +118,7 @@ export function GarminConnectPanel() {
         <p className="mb-1 text-sm font-medium text-slate-800">Garmin export workflow</p>
         <p className="mb-2 text-xs text-slate-500">
           Enable Garmin export mode, upload an export file, then run manual sync to refresh coaching context.
+          Garmin OAuth login is not available in this version.
         </p>
         <p className="mb-2 text-xs text-slate-600">
           Status: <strong>{statusLabel(garminStatus?.status ?? "disconnected")}</strong>
@@ -150,6 +151,32 @@ export function GarminConnectPanel() {
             Disconnect
           </button>
         </div>
+      </div>
+
+      <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3">
+        <p className="mb-1 text-sm font-medium text-slate-800">How to export from Garmin Connect</p>
+        <ol className="list-decimal space-y-1 pl-4 text-xs text-slate-700">
+          <li>
+            Open{" "}
+            <a
+              href="https://www.garmin.com/account/datamanagement/"
+              target="_blank"
+              rel="noreferrer"
+              className="font-medium text-slate-900 underline"
+            >
+              Garmin Account Management
+            </a>{" "}
+            and sign in.
+          </li>
+          <li>Choose <strong>Export Your Data</strong> and request a data export.</li>
+          <li>Wait for Garmin&apos;s export email (often up to 48 hours).</li>
+          <li>Download the zip file from Garmin and unzip it on your computer.</li>
+          <li>Find JSON/CSV files that contain sleep/wellness metrics.</li>
+          <li>Upload one of those files below, then run <strong>Manual sync</strong>.</li>
+        </ol>
+        <p className="mt-2 text-xs text-slate-500">
+          Note: activity FIT/GPX route exports are different from wellness exports and may not include sleep context.
+        </p>
       </div>
 
       <div className="rounded-2xl border border-slate-200 p-3">

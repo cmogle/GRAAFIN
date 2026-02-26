@@ -9,7 +9,7 @@ Garmin Connect API access is typically restricted to approved business developer
 ## Supported flow
 
 1. Export sleep data from Garmin Connect as JSON/CSV.
-2. Upload file in Profile -> Wellness inputs panel.
+2. Upload file in Profile -> Garmin Connect panel.
 3. The app imports parsed records into:
    - `wellness_sleep_sessions` (sleep)
    - `wellness_daily_metrics` (HRV, stress, body battery, readiness, HR, steps, etc.)
@@ -37,7 +37,16 @@ Current scope:
 UI:
 
 1. Top nav Menu includes `Connect Garmin` and `Manual Garmin sync`.
-2. Profile -> Wellness includes full Garmin connect/import/sync controls.
+2. Profile -> Garmin Connect includes full Garmin connect/import/sync controls.
+
+## Athlete walkthrough (export file)
+
+1. Go to Garmin Account Management: https://www.garmin.com/account/datamanagement/
+2. Sign in and open **Export Your Data**.
+3. Request export and wait for the Garmin email (can take up to 48 hours).
+4. Download the provided zip and unzip locally.
+5. Locate JSON/CSV wellness files (sleep / daily metrics).
+6. In GRAAFIN, open **Profile & Connections -> Garmin Connect**, upload the file, then run **Manual sync**.
 
 ## Notes
 
