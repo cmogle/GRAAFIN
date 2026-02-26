@@ -18,7 +18,7 @@ type ThreadRow = {
 type MessageRow = {
   id: string;
   role: string;
-  content: string;
+  content: unknown;
   created_at: string;
 };
 
@@ -28,6 +28,25 @@ function tableMissingMessage(error: unknown) {
     return "Coach tables are not installed. Run docs/SUPABASE_COACH_SCHEMA.sql in Supabase.";
   }
   return message;
+}
+
+function normalizeContent(value: unknown): string {
+  if (typeof value === "string") return value.trim();
+  if (typeof value === "number" || typeof value === "boolean") return String(value);
+  if (Array.isArray(value)) return value.map((item) => normalizeContent(item)).filter(Boolean).join("\n").trim();
+  if (value && typeof value === "object") {
+    const record = value as Record<string, unknown>;
+    for (const key of ["text", "content", "message", "recommendation", "rationale"]) {
+      const candidate = normalizeContent(record[key]);
+      if (candidate) return candidate;
+    }
+    try {
+      return JSON.stringify(value);
+    } catch {
+      return String(value);
+    }
+  }
+  return "";
 }
 
 export async function POST(request: NextRequest) {
@@ -136,7 +155,7 @@ export async function POST(request: NextRequest) {
 
     const conversation = (messageRows as MessageRow[] | null | undefined)?.map((row) => ({
       role: row.role,
-      content: row.content,
+      content: normalizeContent(row.content),
     })) ?? [{ role: "user", content: message }];
 
     const coach = await orchestrateCoachReply({
@@ -146,6 +165,7 @@ export async function POST(request: NextRequest) {
       conversation,
       contextMode,
     });
+    const assistantContent = normalizeContent(coach.assistantMessage);
 
     const { data: assistantRow } = await supabase
       .from("coach_messages")
@@ -153,7 +173,7 @@ export async function POST(request: NextRequest) {
         user_id: user.id,
         thread_id: thread.id,
         role: "assistant",
-        content: coach.assistantMessage,
+        content: assistantContent,
         confidence: coach.confidence,
         citations: coach.citations,
         metadata: {
@@ -184,7 +204,7 @@ export async function POST(request: NextRequest) {
               supabase,
               userId: user.id,
               userMessage: message,
-              assistantMessage: coach.assistantMessage,
+              assistantMessage: assistantContent,
               sourceMessageId: assistantMessageId,
             }),
           ]
@@ -201,7 +221,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({
       threadId: thread.id,
-      assistantMessage: coach.assistantMessage,
+      assistantMessage: assistantContent,
       citations: coach.citations,
       confidence: coach.confidence,
       suggestedActions: coach.suggestedActions,

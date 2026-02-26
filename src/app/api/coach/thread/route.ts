@@ -8,6 +8,24 @@ function asPositiveInt(raw: string | null, fallback: number) {
   return Math.trunc(parsed);
 }
 
+function normalizeContent(value: unknown): string {
+  if (typeof value === "string") return value;
+  if (typeof value === "number" || typeof value === "boolean") return String(value);
+  if (value && typeof value === "object") {
+    const record = value as Record<string, unknown>;
+    for (const key of ["text", "content", "message"]) {
+      const candidate = normalizeContent(record[key]);
+      if (candidate) return candidate;
+    }
+    try {
+      return JSON.stringify(value);
+    } catch {
+      return String(value);
+    }
+  }
+  return "";
+}
+
 export async function GET(request: NextRequest) {
   if (!featureFlags.coachV1) {
     return NextResponse.json({ error: "Coach feature is disabled" }, { status: 404 });
@@ -61,8 +79,16 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: messageError.message }, { status: 500 });
   }
 
+  const normalizedMessages = (messages ?? []).map((row) => {
+    const item = row as Record<string, unknown>;
+    return {
+      ...item,
+      content: normalizeContent(item.content),
+    };
+  });
+
   return NextResponse.json({
     thread: thread ?? null,
-    messages: messages ?? [],
+    messages: normalizedMessages,
   });
 }

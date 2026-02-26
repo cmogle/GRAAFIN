@@ -61,6 +61,41 @@ function clamp(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value));
 }
 
+function coerceText(value: unknown): string {
+  if (typeof value === "string") return value.trim();
+  if (typeof value === "number" || typeof value === "boolean") return String(value);
+  if (Array.isArray(value)) {
+    return value
+      .map((item) => coerceText(item))
+      .filter((item) => item.length > 0)
+      .join("\n")
+      .trim();
+  }
+  if (value && typeof value === "object") {
+    const record = value as Record<string, unknown>;
+    for (const key of ["text", "content", "message", "summary", "recommendation", "rationale"]) {
+      const candidate = coerceText(record[key]);
+      if (candidate) return candidate;
+    }
+    try {
+      return JSON.stringify(value);
+    } catch {
+      return String(value);
+    }
+  }
+  return "";
+}
+
+function coerceStringArray(value: unknown, limit: number): string[] {
+  if (!value) return [];
+  const rawItems = Array.isArray(value) ? value : [value];
+  return rawItems
+    .map((item) => coerceText(item))
+    .map((item) => item.trim())
+    .filter((item) => item.length > 0)
+    .slice(0, limit);
+}
+
 function tryParseJson<T>(raw: string): T | null {
   try {
     return JSON.parse(raw) as T;
@@ -513,7 +548,9 @@ export async function orchestrateCoachReply({
       citations?: string[];
     }>(result.text);
 
-    if (!parsed?.recommendation || !parsed?.rationale) {
+    const recommendation = coerceText(parsed?.recommendation);
+    const rationale = coerceText(parsed?.rationale);
+    if (!recommendation || !rationale) {
       throw new Error("Model returned non-JSON or missing required keys");
     }
 
@@ -532,17 +569,17 @@ export async function orchestrateCoachReply({
     const riskFlags = Array.from(
       new Set([
         ...specialists.flatMap((s) => s.riskFlags),
-        ...(Array.isArray(parsed.risk_flags) ? parsed.risk_flags.map(String) : []),
+        ...coerceStringArray(parsed?.risk_flags, 8),
       ]),
     );
 
     return {
-      assistantMessage: `${parsed.recommendation}\n\nWhy: ${parsed.rationale}`,
-      confidence: clamp(Number(parsed.confidence ?? 0.7), 0.25, 0.98),
+      assistantMessage: `${recommendation}\n\nWhy: ${rationale}`,
+      confidence: clamp(Number(parsed?.confidence ?? 0.7), 0.25, 0.98),
       riskFlags,
-      followUpQuestions: (parsed.follow_up_questions ?? []).map(String).slice(0, 3),
-      suggestedActions: (parsed.suggested_actions ?? []).map(String).slice(0, 4),
-      citations: (parsed.citations ?? []).map(String).slice(0, 6),
+      followUpQuestions: coerceStringArray(parsed?.follow_up_questions, 3),
+      suggestedActions: coerceStringArray(parsed?.suggested_actions, 4),
+      citations: coerceStringArray(parsed?.citations, 6),
       traces,
       usage: result.usage,
     };

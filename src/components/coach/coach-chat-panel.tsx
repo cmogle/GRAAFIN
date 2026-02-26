@@ -18,7 +18,7 @@ type ChatMessage = {
 
 type ThreadPayload = {
   thread: { id: string } | null;
-  messages: ChatMessage[];
+  messages: Array<Partial<ChatMessage> & { id?: unknown; role?: unknown; content?: unknown }>;
 };
 
 const CACHE_KEY = "graafin_coach_thread_cache_v1";
@@ -28,6 +28,53 @@ const quickPrompts = [
   "Is my current training load sustainable?",
   "Give me one high-confidence adjustment for this week.",
 ];
+
+function normalizeContent(value: unknown): string {
+  if (typeof value === "string") return value;
+  if (typeof value === "number" || typeof value === "boolean") return String(value);
+  if (Array.isArray(value)) return value.map((item) => normalizeContent(item)).filter(Boolean).join("\n");
+  if (value && typeof value === "object") {
+    const record = value as Record<string, unknown>;
+    for (const key of ["text", "content", "message", "recommendation", "rationale"]) {
+      const candidate = normalizeContent(record[key]);
+      if (candidate) return candidate;
+    }
+    try {
+      return JSON.stringify(value);
+    } catch {
+      return String(value);
+    }
+  }
+  return "";
+}
+
+function normalizeRole(value: unknown): ChatMessage["role"] {
+  return value === "assistant" || value === "system" ? value : "user";
+}
+
+function normalizeMessages(rawMessages: ThreadPayload["messages"]): ChatMessage[] {
+  return (rawMessages ?? []).map((raw, index) => {
+    const metadataRaw = raw.metadata as Record<string, unknown> | undefined;
+    return {
+      id: typeof raw.id === "string" ? raw.id : `msg-${Date.now()}-${index}`,
+      role: normalizeRole(raw.role),
+      content: normalizeContent(raw.content),
+      created_at: typeof raw.created_at === "string" ? raw.created_at : undefined,
+      confidence: typeof raw.confidence === "number" ? raw.confidence : null,
+      metadata: {
+        suggestedActions: Array.isArray(metadataRaw?.suggestedActions)
+          ? metadataRaw?.suggestedActions.map((value) => normalizeContent(value)).filter(Boolean)
+          : [],
+        followUpQuestions: Array.isArray(metadataRaw?.followUpQuestions)
+          ? metadataRaw?.followUpQuestions.map((value) => normalizeContent(value)).filter(Boolean)
+          : [],
+        riskFlags: Array.isArray(metadataRaw?.riskFlags)
+          ? metadataRaw?.riskFlags.map((value) => normalizeContent(value)).filter(Boolean)
+          : [],
+      },
+    };
+  });
+}
 
 export function CoachChatPanel() {
   const [threadId, setThreadId] = useState<string | null>(null);
@@ -45,15 +92,17 @@ export function CoachChatPanel() {
         const res = await fetch("/api/coach/thread", { method: "GET" });
         if (!res.ok) throw new Error("Failed to load coach thread");
         const data = (await res.json()) as ThreadPayload;
+        const normalized = normalizeMessages(data.messages ?? []);
         setThreadId(data.thread?.id ?? null);
-        setMessages(data.messages ?? []);
-        localStorage.setItem(CACHE_KEY, JSON.stringify(data));
+        setMessages(normalized);
+        localStorage.setItem(CACHE_KEY, JSON.stringify({ thread: data.thread, messages: normalized }));
       } catch (e) {
         const cached = localStorage.getItem(CACHE_KEY);
         if (cached) {
           const data = JSON.parse(cached) as ThreadPayload;
+          const normalized = normalizeMessages(data.messages ?? []);
           setThreadId(data.thread?.id ?? null);
-          setMessages(data.messages ?? []);
+          setMessages(normalized);
           setError("Using cached coach thread while offline.");
         } else {
           setError(e instanceof Error ? e.message : "Failed to load coach thread");
@@ -91,12 +140,18 @@ export function CoachChatPanel() {
       const assistant: ChatMessage = {
         id: String(data.assistantMessageId ?? `assistant-${Date.now()}`),
         role: "assistant",
-        content: String(data.assistantMessage ?? ""),
+        content: normalizeContent(data.assistantMessage),
         confidence: typeof data.confidence === "number" ? data.confidence : null,
         metadata: {
-          suggestedActions: Array.isArray(data.suggestedActions) ? data.suggestedActions : [],
-          followUpQuestions: Array.isArray(data.followUpQuestions) ? data.followUpQuestions : [],
-          riskFlags: Array.isArray(data.riskFlags) ? data.riskFlags : [],
+          suggestedActions: Array.isArray(data.suggestedActions)
+            ? data.suggestedActions.map((value: unknown) => normalizeContent(value)).filter(Boolean)
+            : [],
+          followUpQuestions: Array.isArray(data.followUpQuestions)
+            ? data.followUpQuestions.map((value: unknown) => normalizeContent(value)).filter(Boolean)
+            : [],
+          riskFlags: Array.isArray(data.riskFlags)
+            ? data.riskFlags.map((value: unknown) => normalizeContent(value)).filter(Boolean)
+            : [],
         },
       };
 
