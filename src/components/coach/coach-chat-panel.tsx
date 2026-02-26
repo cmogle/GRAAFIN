@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type KeyboardEvent } from "react";
 import { Send, Loader2, CircleAlert } from "lucide-react";
 
 type ChatMessage = {
@@ -181,6 +181,15 @@ export function CoachChatPanel() {
     [messages],
   );
 
+  const onComposerKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
+    if (event.key !== "Enter" || event.shiftKey || event.nativeEvent.isComposing) {
+      return;
+    }
+    event.preventDefault();
+    if (loading || !input.trim()) return;
+    void send(input);
+  };
+
   return (
     <div className="space-y-4">
       {error ? (
@@ -259,6 +268,7 @@ export function CoachChatPanel() {
         <textarea
           value={input}
           onChange={(e) => setInput(e.target.value)}
+          onKeyDown={onComposerKeyDown}
           className="min-h-24 flex-1 rounded-2xl border border-slate-300 bg-white px-3 py-2 text-sm"
           placeholder="Ask your coach anything about load, readiness, pacing, or plan decisions."
         />
