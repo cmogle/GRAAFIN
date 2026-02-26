@@ -51,6 +51,17 @@ function tableMissingMessage(error: unknown) {
   return message;
 }
 
+function isCoachTableMissingMessage(message: string) {
+  const lower = message.toLowerCase();
+  return (
+    lower.includes("coach tables are not installed") ||
+    lower.includes("could not find the table 'public.coach_threads'") ||
+    lower.includes("could not find the table 'public.coach_messages'") ||
+    lower.includes("does not exist") ||
+    lower.includes("42p01")
+  );
+}
+
 function normalizeContent(value: unknown): string {
   if (typeof value === "string") return value.trim();
   if (typeof value === "number" || typeof value === "boolean") return String(value);
@@ -96,6 +107,35 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Message is too long" }, { status: 400 });
   }
 
+  const generateTransientCoachReply = async () => {
+    const cockpit = await buildCockpitPayload({ supabase, userId: user.id });
+    const coach = await orchestrateCoachReply({
+      userMessage: message,
+      cockpit,
+      memoryItems: [],
+      conversation: [{ role: "user", content: message }],
+      contextMode,
+    });
+    const assistantContent = normalizeContent(coach.assistantMessage);
+
+    return NextResponse.json({
+      threadId: null,
+      assistantMessage: assistantContent,
+      citations: coach.citations,
+      confidence: coach.confidence,
+      suggestedActions: coach.suggestedActions,
+      riskFlags: coach.riskFlags,
+      followUpQuestions: coach.followUpQuestions,
+      usage: coach.usage ?? null,
+      generatedAt: new Date().toISOString(),
+      userMessageId: null,
+      assistantMessageId: null,
+      transient: true,
+      warning:
+        "Coach persistence is not available yet. Run docs/SUPABASE_COACH_SCHEMA.sql in this Supabase project.",
+    });
+  };
+
   try {
     let thread: ThreadRow | null = null;
     if (requestedThreadId) {
@@ -120,6 +160,10 @@ export async function POST(request: NextRequest) {
         .single();
 
       if (error) {
+        const mapped = tableMissingMessage(error);
+        if (isCoachTableMissingMessage(mapped)) {
+          return await generateTransientCoachReply();
+        }
         return NextResponse.json({ error: tableMissingMessage(error) }, { status: 500 });
       }
       thread = data as ThreadRow;
@@ -137,7 +181,11 @@ export async function POST(request: NextRequest) {
       .single();
 
     if (userMessageError) {
-      return NextResponse.json({ error: tableMissingMessage(userMessageError) }, { status: 500 });
+      const mapped = tableMissingMessage(userMessageError);
+      if (isCoachTableMissingMessage(mapped)) {
+        return await generateTransientCoachReply();
+      }
+      return NextResponse.json({ error: mapped }, { status: 500 });
     }
 
     const memoryPromise = featureFlags.coachMemoryV1
@@ -254,8 +302,12 @@ export async function POST(request: NextRequest) {
       assistantMessageId,
     });
   } catch (error) {
+    const mapped = tableMissingMessage(error);
+    if (isCoachTableMissingMessage(mapped)) {
+      return await generateTransientCoachReply();
+    }
     return NextResponse.json(
-      { error: tableMissingMessage(error) },
+      { error: mapped },
       { status: 500 },
     );
   }

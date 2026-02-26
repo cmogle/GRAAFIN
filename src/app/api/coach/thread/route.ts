@@ -26,6 +26,19 @@ function normalizeContent(value: unknown): string {
   return "";
 }
 
+const COACH_TABLES_MISSING_MESSAGE =
+  "Coach memory tables are not installed in this Supabase project. Run docs/SUPABASE_COACH_SCHEMA.sql.";
+
+function isCoachTableMissing(message: string) {
+  const lower = message.toLowerCase();
+  return (
+    lower.includes("could not find the table 'public.coach_threads'") ||
+    lower.includes("could not find the table 'public.coach_messages'") ||
+    lower.includes("does not exist") ||
+    lower.includes("42p01")
+  );
+}
+
 export async function GET(request: NextRequest) {
   if (!featureFlags.coachV1) {
     return NextResponse.json({ error: "Coach feature is disabled" }, { status: 404 });
@@ -45,13 +58,24 @@ export async function GET(request: NextRequest) {
 
   let effectiveThreadId = threadId;
   if (!effectiveThreadId) {
-    const { data: latestThread } = await supabase
+    const { data: latestThread, error: latestThreadError } = await supabase
       .from("coach_threads")
       .select("id,title,updated_at")
       .eq("user_id", user.id)
       .order("updated_at", { ascending: false })
       .limit(1)
       .maybeSingle();
+    if (latestThreadError) {
+      if (isCoachTableMissing(latestThreadError.message)) {
+        return NextResponse.json({
+          thread: null,
+          messages: [],
+          coachUnavailable: true,
+          warning: COACH_TABLES_MISSING_MESSAGE,
+        });
+      }
+      return NextResponse.json({ error: latestThreadError.message }, { status: 500 });
+    }
     effectiveThreadId = latestThread?.id ? String(latestThread.id) : null;
   }
 
@@ -76,6 +100,14 @@ export async function GET(request: NextRequest) {
   ]);
 
   if (messageError) {
+    if (isCoachTableMissing(messageError.message)) {
+      return NextResponse.json({
+        thread: null,
+        messages: [],
+        coachUnavailable: true,
+        warning: COACH_TABLES_MISSING_MESSAGE,
+      });
+    }
     return NextResponse.json({ error: messageError.message }, { status: 500 });
   }
 

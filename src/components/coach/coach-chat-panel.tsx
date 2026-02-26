@@ -19,6 +19,8 @@ type ChatMessage = {
 type ThreadPayload = {
   thread: { id: string } | null;
   messages: Array<Partial<ChatMessage> & { id?: unknown; role?: unknown; content?: unknown }>;
+  coachUnavailable?: boolean;
+  warning?: unknown;
 };
 
 const CACHE_KEY = "graafin_coach_thread_cache_v1";
@@ -98,6 +100,7 @@ export function CoachChatPanel() {
         const normalized = normalizeMessages(data.messages ?? []);
         setThreadId(data.thread?.id ?? null);
         setMessages(normalized);
+        if (data.warning) setError(normalizeContent(data.warning));
         localStorage.setItem(CACHE_KEY, JSON.stringify({ thread: data.thread, messages: normalized }));
       } catch (e) {
         const cached = localStorage.getItem(CACHE_KEY);
@@ -168,6 +171,7 @@ export function CoachChatPanel() {
       };
 
       setMessages((prev) => {
+        const nextThreadId = typeof data.threadId === "string" && data.threadId.length > 0 ? data.threadId : threadId;
         const nextMessages: ChatMessage[] = [
           ...prev.filter((m) => m.id !== tempId),
           { id: String(data.userMessageId ?? tempId), role: "user", content: trimmed },
@@ -175,11 +179,14 @@ export function CoachChatPanel() {
         ];
         localStorage.setItem(
           CACHE_KEY,
-          JSON.stringify({ thread: { id: String(data.threadId ?? threadId ?? "") }, messages: nextMessages }),
+          JSON.stringify({ thread: nextThreadId ? { id: nextThreadId } : null, messages: nextMessages }),
         );
         return nextMessages;
       });
-      setThreadId(String(data.threadId ?? threadId ?? ""));
+      if (typeof data.warning === "string" && data.warning.trim().length > 0) {
+        setError(data.warning.trim());
+      }
+      setThreadId(typeof data.threadId === "string" && data.threadId.length > 0 ? data.threadId : threadId);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to send message");
       setMessages((prev) => prev.filter((m) => m.id !== tempId));
