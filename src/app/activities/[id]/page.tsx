@@ -4,6 +4,7 @@ import { SectionCard } from "@/components/section-card";
 import { compareRunVsCategory, formatPace, marathonBlockPatterns, RunActivity } from "@/lib/metrics/dashboard";
 import { getCachedRunComparison } from "@/lib/metrics/cache";
 import { createClient } from "@/lib/supabase/server";
+import { getPrimaryAthleteId } from "@/lib/athlete";
 
 function toRun(row: Record<string, unknown>): RunActivity {
   return {
@@ -20,10 +21,12 @@ function toRun(row: Record<string, unknown>): RunActivity {
 export default async function ActivityDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const supabase = await createClient();
+  const athleteId = getPrimaryAthleteId();
 
   const { data } = await supabase
     .from("strava_activities")
     .select("id,name,type,start_date,distance_m,moving_time_s,average_speed,average_heartrate")
+    .eq("athlete_id", athleteId)
     .eq("type", "Run")
     .order("start_date", { ascending: false })
     .limit(400);

@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import { getPrimaryAthleteId } from "@/lib/athlete";
 
 type AnyRow = Record<string, unknown>;
 const SYNC_DATE_KEYS = ["last_success_at", "last_synced_at", "synced_at", "updated_at"] as const;
@@ -42,15 +43,17 @@ function latestSyncRow(rows: AnyRow[] | null | undefined): AnyRow | null {
 
 export async function getStravaStatus() {
   const supabase = await createClient();
+  const athleteId = getPrimaryAthleteId();
 
   const [{ data: latestActivity }, { data: syncRows }] = await Promise.all([
     supabase
       .from("strava_activities")
       .select("id,name,type,start_date,distance_m,moving_time_s")
+      .eq("athlete_id", athleteId)
       .order("start_date", { ascending: false })
       .limit(1)
       .maybeSingle(),
-    supabase.from("strava_sync_state").select("*").limit(25),
+    supabase.from("strava_sync_state").select("*").eq("athlete_id", athleteId).limit(25),
   ]);
 
   const syncRow = latestSyncRow((syncRows as AnyRow[] | null | undefined) ?? null);

@@ -1,3 +1,5 @@
+import { hasInternalSyncConfig, runInternalStravaSync } from "@/lib/sync/internal-strava-sync";
+
 type TriggerRemoteSyncOptions = {
   source: string;
   requestedBy?: string | null;
@@ -6,7 +8,7 @@ type TriggerRemoteSyncOptions = {
 
 export type TriggerRemoteSyncResult = {
   ok: boolean;
-  channel: "github" | "webhook" | "none";
+  channel: "internal" | "github" | "webhook" | "none";
   message: string;
   remoteStatus: number | null;
   remoteBodyPreview: string | null;
@@ -27,6 +29,22 @@ function hasGithubConfig() {
 
 function hasWebhookConfig() {
   return Boolean(process.env.STRAVA_SYNC_WEBHOOK_URL);
+}
+
+async function triggerViaInternal(options: TriggerRemoteSyncOptions): Promise<TriggerRemoteSyncResult> {
+  const result = await runInternalStravaSync({
+    source: options.source,
+    requestedBy: options.requestedBy ?? null,
+    force: options.force === true,
+  });
+
+  return {
+    ok: result.ok,
+    channel: "internal",
+    message: result.message,
+    remoteStatus: result.ok ? 200 : 500,
+    remoteBodyPreview: null,
+  };
 }
 
 async function triggerViaGithub(options: TriggerRemoteSyncOptions): Promise<TriggerRemoteSyncResult> {
@@ -135,7 +153,11 @@ async function triggerViaWebhook(options: TriggerRemoteSyncOptions): Promise<Tri
 export async function triggerRemoteStravaSync(
   options: TriggerRemoteSyncOptions,
 ): Promise<TriggerRemoteSyncResult> {
-  const mode = (process.env.STRAVA_SYNC_TRIGGER_MODE || "auto").toLowerCase();
+  const mode = (process.env.STRAVA_SYNC_TRIGGER_MODE || "internal").toLowerCase();
+
+  if (mode === "internal") {
+    return triggerViaInternal(options);
+  }
 
   if (mode === "github") {
     return triggerViaGithub(options);
@@ -144,6 +166,9 @@ export async function triggerRemoteStravaSync(
     return triggerViaWebhook(options);
   }
 
+  if (hasInternalSyncConfig()) {
+    return triggerViaInternal(options);
+  }
   if (hasGithubConfig()) {
     return triggerViaGithub(options);
   }
@@ -155,7 +180,7 @@ export async function triggerRemoteStravaSync(
     ok: false,
     channel: "none",
     message:
-      "No sync trigger backend configured. Set GitHub dispatch env vars or STRAVA_SYNC_WEBHOOK_URL.",
+      "No sync trigger backend configured. Set internal STRAVA credentials, GitHub dispatch env vars, or STRAVA_SYNC_WEBHOOK_URL.",
     remoteStatus: null,
     remoteBodyPreview: null,
   };

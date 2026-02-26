@@ -1,16 +1,16 @@
 # Strava Sync Methodology (Current Baseline)
 
 ## Purpose
-This documents the current contract between GRAAFIN and the external `strava-sync` service for syncing activities (including Garmin-uploaded activities that land in Strava) into Supabase.
+This documents the current in-repo Strava sync contract for ingesting activities (including Garmin-uploaded activities that land in Strava) into Supabase.
 
 ## Current architecture
 1. Garmin watch uploads activity to Strava.
-2. `strava-sync` fetches activities from Strava API.
-3. `strava-sync` writes/upserts activity rows into Supabase.
-4. GRAAFIN reads Supabase tables for dashboard/query views.
-5. GRAAFIN can request a sync run through `POST /api/sync/trigger` (GitHub workflow dispatch or webhook trigger backend).
+2. GRAAFIN `internal-strava-sync` refreshes token(s) and fetches activities from Strava API.
+3. GRAAFIN upserts activity rows into Supabase (`strava_activities`) and updates `strava_sync_state`.
+4. Dashboard/query/coach views read Supabase tables for analysis.
+5. Sync runs are requested through `POST /api/sync/trigger` (default: internal mode).
 
-`strava-sync` is external to this repo. This repo only triggers it and reads resulting data.
+Legacy fallback modes (`github`/`webhook`) remain available but are not required.
 
 ## Required Supabase tables
 
@@ -28,6 +28,7 @@ Minimum columns used by GRAAFIN:
 Recommended ingestion behavior:
 - Upsert by `id` (idempotent syncs).
 - Preserve all Strava activity types; GRAAFIN filters to `type = 'Run'` for run analytics.
+- Always set `athlete_id` for multi-athlete coexistence.
 - Keep raw metric units from Strava (`m`, `s`) to avoid conversion drift.
 
 ### `strava_sync_state`
@@ -41,13 +42,15 @@ Recommended ingestion behavior:
 ## Manual trigger contract
 `POST /api/sync/trigger` in GRAAFIN:
 - Requires authenticated user.
-- Supports two trigger backends:
+- Supports backends:
+  - Internal Strava sync (`STRAVA_SYNC_TRIGGER_MODE=internal`, default)
   - GitHub workflow dispatch (`STRAVA_SYNC_GITHUB_*` env vars)
   - Webhook (`STRAVA_SYNC_WEBHOOK_URL` + optional bearer token)
 - Uses a 12s timeout and surfaces upstream status/body preview on failures.
 
-For `cmogle/strava-sync`:
-- Recommended backend is GitHub workflow dispatch of `fionnuala-manual-sync.yml`.
+Multi-athlete sync behavior:
+- Sync worker can ingest multiple athlete credentials in one run.
+- App analysis remains scoped to `APP_PRIMARY_ATHLETE_ID` (Fionnuala by default).
 
 ## Dashboard analytics currently driven by this data
 - Distance trend (last 8 weeks).
@@ -69,6 +72,6 @@ select max(coalesce(last_success_at, last_synced_at, synced_at, updated_at)) as 
 If these return sane values and `Run` rows are present, GRAAFIN's dashboard should populate.
 
 ## Known scaling limits (important for multi-athlete)
-- Current app queries do not scope activities by athlete/user id.
-- Connection status is inferred from any available activity row.
-- To scale beyond a single athlete profile, add explicit athlete scoping in every read path.
+- Analysis views are currently hard-scoped to one primary athlete (`APP_PRIMARY_ATHLETE_ID`).
+- Multi-athlete switching UI is not implemented yet.
+- Training/coach per-athlete profile switching is not in v1.

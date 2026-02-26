@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { marathonBlockPatterns, RunActivity } from "@/lib/metrics/dashboard";
 import { getCachedRunComparison } from "@/lib/metrics/cache";
+import { getPrimaryAthleteId } from "@/lib/athlete";
 
 type QueryResult = { summary: string; rows?: unknown[]; chartData?: unknown[] };
 
@@ -19,6 +20,7 @@ function toRun(row: Record<string, unknown>): RunActivity {
 
 export async function POST(request: NextRequest) {
   const supabase = await createClient();
+  const athleteId = getPrimaryAthleteId();
   const body = await request.json().catch(() => ({}));
   const query = String(body?.query ?? "").trim().toLowerCase();
   const runId = typeof body?.runId === "string" ? body.runId : null;
@@ -33,6 +35,7 @@ export async function POST(request: NextRequest) {
     const { data, error } = await supabase
       .from("strava_activities")
       .select("id,name,type,start_date,distance_m,moving_time_s,average_speed,average_heartrate")
+      .eq("athlete_id", athleteId)
       .eq("type", "Run")
       .order("start_date", { ascending: false })
       .limit(400);
@@ -53,6 +56,7 @@ export async function POST(request: NextRequest) {
     const { data, error } = await supabase
       .from("strava_activities")
       .select("id,name,type,start_date,distance_m,moving_time_s,average_speed,average_heartrate")
+      .eq("athlete_id", athleteId)
       .eq("type", "Run")
       .order("start_date", { ascending: false })
       .limit(800);
@@ -76,6 +80,7 @@ export async function POST(request: NextRequest) {
     const { data, error } = await supabase
       .from("strava_activities")
       .select("distance_m")
+      .eq("athlete_id", athleteId)
       .eq("type", "Run")
       .gte("start_date", from.toISOString());
 
@@ -101,6 +106,7 @@ export async function POST(request: NextRequest) {
     const { data, error } = await supabase
       .from("strava_activities")
       .select("distance_m")
+      .eq("athlete_id", athleteId)
       .eq("type", "Run")
       .gte("start_date", startOfWeek.toISOString());
 

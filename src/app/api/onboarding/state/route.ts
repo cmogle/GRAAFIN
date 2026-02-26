@@ -1,8 +1,10 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { getPrimaryAthleteId } from "@/lib/athlete";
 
 export async function GET() {
   const supabase = await createClient();
+  const athleteId = getPrimaryAthleteId();
   const {
     data: { user },
   } = await supabase.auth.getUser();
@@ -14,7 +16,8 @@ export async function GET() {
   const [{ count: stravaActivities }, { count: activePlans }, { count: coachMessages }] = await Promise.all([
     supabase
       .from("strava_activities")
-      .select("id", { count: "exact", head: true }),
+      .select("id", { count: "exact", head: true })
+      .eq("athlete_id", athleteId),
     supabase
       .from("training_plans")
       .select("id", { count: "exact", head: true })

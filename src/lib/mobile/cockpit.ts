@@ -5,6 +5,7 @@ import {
   computeTrainingLoad,
   readinessStatus,
 } from "@/lib/metrics/load";
+import { getPrimaryAthleteId } from "@/lib/athlete";
 
 type Workout = {
   id: string;
@@ -194,6 +195,7 @@ export async function buildCockpitPayload({
   userId: string;
   date?: string;
 }): Promise<CockpitPayload> {
+  const athleteId = getPrimaryAthleteId();
   const selectedDate = date ? new Date(`${date}T00:00:00.000Z`) : new Date();
   const selectedDateKey = toDateKey(selectedDate);
   const selectedDayIndex = mondayIndex(selectedDate);
@@ -202,6 +204,7 @@ export async function buildCockpitPayload({
     supabase
       .from("strava_activities")
       .select("id,name,type,start_date,distance_m,moving_time_s,average_heartrate")
+      .eq("athlete_id", athleteId)
       .order("start_date", { ascending: false })
       .limit(1400),
     supabase

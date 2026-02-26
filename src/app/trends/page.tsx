@@ -10,6 +10,7 @@ import {
   weeklyDistanceTrend,
 } from "@/lib/metrics/dashboard";
 import { createClient } from "@/lib/supabase/server";
+import { getPrimaryAthleteId } from "@/lib/athlete";
 
 function mapRun(row: Record<string, unknown>): RunActivity {
   return {
@@ -25,6 +26,7 @@ function mapRun(row: Record<string, unknown>): RunActivity {
 
 export default async function TrendsPage() {
   const supabase = await createClient();
+  const athleteId = getPrimaryAthleteId();
   const {
     data: { user },
   } = await supabase.auth.getUser();
@@ -34,6 +36,7 @@ export default async function TrendsPage() {
   const { data } = await supabase
     .from("strava_activities")
     .select("id,name,type,start_date,distance_m,moving_time_s,average_speed,average_heartrate")
+    .eq("athlete_id", athleteId)
     .eq("type", "Run")
     .order("start_date", { ascending: false })
     .limit(1000);

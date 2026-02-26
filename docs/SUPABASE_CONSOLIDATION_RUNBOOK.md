@@ -34,22 +34,18 @@ Actual migration:
 node scripts/migrate-strava-data.mjs
 ```
 
-## 3) Repoint strava-sync writer to fazdb...
-
-For `cmogle/strava-sync` (GitHub Actions workflow):
-- in GitHub repo secrets, set `SUPABASE_URL=https://fazdbecnxwgkvbxwlrfn.supabase.co`
-- set `SUPABASE_SERVICE_KEY=<fazdb service role key>`
+## 3) Configure in-repo sync writer in GRAAFIN
 
 In GRAAFIN runtime env:
-- set `STRAVA_SYNC_TRIGGER_MODE=github`
-- set `STRAVA_SYNC_GITHUB_TOKEN=<token with workflow dispatch permission>`
-- optional defaults:
-  - `STRAVA_SYNC_GITHUB_OWNER=cmogle`
-  - `STRAVA_SYNC_GITHUB_REPO=strava-sync`
-  - `STRAVA_SYNC_GITHUB_WORKFLOW=fionnuala-manual-sync.yml`
-  - `STRAVA_SYNC_GITHUB_REF=main`
+- set `STRAVA_SYNC_TRIGGER_MODE=internal`
+- set athlete credentials:
+  - `FIONNUALA_STRAVA_CLIENT_ID`, `FIONNUALA_STRAVA_CLIENT_SECRET`, `FIONNUALA_STRAVA_REFRESH_TOKEN`, `FIONNUALA_STRAVA_ATHLETE_ID=69629233`
+  - `CONOR_STRAVA_CLIENT_ID`, `CONOR_STRAVA_CLIENT_SECRET`, `CONOR_STRAVA_REFRESH_TOKEN`, `CONOR_STRAVA_ATHLETE_ID=9750533`
+- set `APP_PRIMARY_ATHLETE_ID=69629233` (analysis scope remains Fionnuala)
 
-If you use a non-GitHub sync service, keep `STRAVA_SYNC_TRIGGER_MODE=webhook` and `STRAVA_SYNC_WEBHOOK_URL`.
+Legacy fallback (optional only):
+- `STRAVA_SYNC_TRIGGER_MODE=github` with `STRAVA_SYNC_GITHUB_*`, or
+- `STRAVA_SYNC_TRIGGER_MODE=webhook` with `STRAVA_SYNC_WEBHOOK_URL`.
 
 ## 4) Confirm GRAAFIN runtime points to fazdb...
 

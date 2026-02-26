@@ -25,32 +25,38 @@ Dashboard status is currently inferred from Supabase data:
 
 ## 3) Sync trigger backend env vars
 
-GRAAFIN supports two remote trigger backends:
-- **GitHub Actions workflow dispatch** (recommended for `cmogle/strava-sync`)
-- **HTTP webhook** (if you run a sync service endpoint)
+GRAAFIN now supports **in-repo Strava sync** (recommended) and optional legacy remote trigger backends.
 
 Core selector:
-- `STRAVA_SYNC_TRIGGER_MODE=auto|github|webhook` (default `auto`)
+- `STRAVA_SYNC_TRIGGER_MODE=internal|auto|github|webhook` (default `internal`)
 
-### Option A: GitHub workflow dispatch (recommended)
+### Option A: In-repo sync (recommended)
 
 Required:
-- `STRAVA_SYNC_GITHUB_TOKEN` (PAT or fine-grained token with actions/workflow dispatch permission on `cmogle/strava-sync`)
+- `STRAVA_CLIENT_ID` + `STRAVA_CLIENT_SECRET` + (`STRAVA_REFRESH_TOKEN` or `STRAVA_ACCESS_TOKEN`)
 
-Optional (defaults shown):
-- `STRAVA_SYNC_GITHUB_OWNER=cmogle`
-- `STRAVA_SYNC_GITHUB_REPO=strava-sync`
-- `STRAVA_SYNC_GITHUB_WORKFLOW=fionnuala-manual-sync.yml`
-- `STRAVA_SYNC_GITHUB_REF=main`
+Multi-athlete support (recommended for your setup):
+- `FIONNUALA_STRAVA_*` credentials
+- `CONOR_STRAVA_*` credentials
+- Optional `STRAVA_ATHLETES_JSON` for explicit athlete list
+- Analysis scope remains controlled by `APP_PRIMARY_ATHLETE_ID` (set this to Fionnuala)
 
 Behavior:
-- GRAAFIN calls GitHub API:
-  - `POST /repos/{owner}/{repo}/actions/workflows/{workflow}/dispatches`
-- Uses `sync_mode` input:
-  - `incremental` by default
-  - `full` when `force=true` is passed
+- GRAAFIN refreshes athlete token(s), fetches Strava activities, and upserts directly into `strava_activities`.
+- Sync state and cursors are persisted in `strava_sync_state` per athlete.
 
-### Option B: HTTP webhook
+### Option B: GitHub workflow dispatch (legacy fallback)
+
+Required:
+- `STRAVA_SYNC_GITHUB_TOKEN`
+
+Optional:
+- `STRAVA_SYNC_GITHUB_OWNER`
+- `STRAVA_SYNC_GITHUB_REPO`
+- `STRAVA_SYNC_GITHUB_WORKFLOW`
+- `STRAVA_SYNC_GITHUB_REF`
+
+### Option C: HTTP webhook (legacy fallback)
 
 Required:
 - `STRAVA_SYNC_WEBHOOK_URL`
@@ -62,7 +68,7 @@ Behavior:
 - GRAAFIN sends `POST STRAVA_SYNC_WEBHOOK_URL`
 - Times out after 12s and returns upstream status/body preview on failures
 
-App behavior (same for both backends):
+App behavior (same for all backends):
 - App launch auto-triggers sync in the background with smart throttling:
   - client cooldown: 20 minutes
   - server hard floor: 3 minutes
@@ -81,7 +87,8 @@ See `docs/STRAVA_SYNC_METHODOLOGY.md` for the full sync contract and validation 
 ## 5) Security notes
 
 - Keep `SUPABASE_SERVICE_ROLE_KEY` server-only.
-- Keep sync webhook token server-only.
+- Keep Strava client secrets and refresh tokens server-only.
+- Keep sync webhook token and GitHub token server-only.
 - Keep RLS enabled for app-owned tables.
 - Keep `CHECKIN_JOB_TOKEN` server-only.
 

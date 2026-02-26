@@ -11,16 +11,13 @@
 
 **Strava sync trigger backend (manual/app-launch trigger path):**
 
-- `STRAVA_SYNC_TRIGGER_MODE` — `auto`, `github`, or `webhook`
-- `STRAVA_SYNC_GITHUB_TOKEN` — token to dispatch `cmogle/strava-sync` workflow (recommended)
-- Optional defaults:
-  - `STRAVA_SYNC_GITHUB_OWNER=cmogle`
-  - `STRAVA_SYNC_GITHUB_REPO=strava-sync`
-  - `STRAVA_SYNC_GITHUB_WORKFLOW=fionnuala-manual-sync.yml`
-  - `STRAVA_SYNC_GITHUB_REF=main`
-- Webhook mode only:
-  - `STRAVA_SYNC_WEBHOOK_URL`
-  - `STRAVA_SYNC_WEBHOOK_TOKEN`
+- `STRAVA_SYNC_TRIGGER_MODE` — `internal` (recommended), `github`, or `webhook`
+- `APP_PRIMARY_ATHLETE_ID=69629233` (analysis scope = Fionnuala)
+- Multi-athlete in-repo sync credentials:
+  - `FIONNUALA_STRAVA_CLIENT_ID`, `FIONNUALA_STRAVA_CLIENT_SECRET`, `FIONNUALA_STRAVA_REFRESH_TOKEN`, `FIONNUALA_STRAVA_ATHLETE_ID`
+  - `CONOR_STRAVA_CLIENT_ID`, `CONOR_STRAVA_CLIENT_SECRET`, `CONOR_STRAVA_REFRESH_TOKEN`, `CONOR_STRAVA_ATHLETE_ID`
+- Legacy fallback only:
+  - `STRAVA_SYNC_GITHUB_*` or `STRAVA_SYNC_WEBHOOK_*`
 
 **Vercel:** In the project → **Settings → Environment Variables**, add **both** `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY`. Apply them to **Production** and **Preview** (and Development if you use Vercel dev). Redeploy after adding or changing vars; existing deployments use the env from when they were built.
 
