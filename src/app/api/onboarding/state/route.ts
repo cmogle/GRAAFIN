@@ -31,16 +31,16 @@ export async function GET() {
 
   const stepAuth = true;
   const stepStrava = (stravaActivities ?? 0) > 0;
-  const stepPlan = (activePlans ?? 0) > 0;
   const stepCoach = (coachMessages ?? 0) > 0;
+  const stepPlan = (activePlans ?? 0) > 0;
 
   return NextResponse.json({
     steps: [
       { key: "auth", label: "Account connected", done: stepAuth },
-      { key: "strava", label: "Strava activity available", done: stepStrava },
-      { key: "plan", label: "Training plan created", done: stepPlan },
+      { key: "strava", label: "Recent Strava activity available", done: stepStrava },
       { key: "coach", label: "First coach conversation", done: stepCoach },
+      { key: "plan_optional", label: "Plan setup (optional in this phase)", done: stepPlan },
     ],
-    complete: stepAuth && stepStrava && stepPlan && stepCoach,
+    complete: stepAuth && stepStrava && stepCoach,
   });
 }

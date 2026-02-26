@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { Activity, ArrowRight, CheckCircle2 } from "lucide-react";
 
@@ -107,21 +107,35 @@ function StepRow({
 /* ------------------------------------------------------------------ */
 export default function LoginPage() {
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [runtimeError, setRuntimeError] = useState<string | null>(null);
+  const [next, setNext] = useState("/dashboard");
+  const [queryError, setQueryError] = useState<string | null>(null);
+  const error = runtimeError || queryError;
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    const nextValue = params.get("next");
+    if (nextValue && nextValue.startsWith("/") && !nextValue.startsWith("//")) {
+      setNext(nextValue);
+    }
+    const errorValue = params.get("error");
+    if (errorValue) setQueryError(errorValue);
+  }, []);
 
   const onGoogleLogin = async () => {
     setLoading(true);
-    setError(null);
+    setRuntimeError(null);
     try {
       const supabase = createClient();
-      const redirectTo = `${window.location.origin}/auth/callback`;
+      const redirectTo = `${window.location.origin}/auth/callback?next=${encodeURIComponent(next)}`;
       const { error } = await supabase.auth.signInWithOAuth({
         provider: "google",
         options: { redirectTo },
       });
       if (error) throw error;
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Login failed");
+      setRuntimeError(e instanceof Error ? e.message : "Login failed");
       setLoading(false);
     }
   };
@@ -159,14 +173,14 @@ export default function LoginPage() {
           className="animate-fade-up text-center text-3xl font-bold tracking-tight text-card sm:text-4xl"
           style={{ animationDelay: "0.25s" }}
         >
-          <span className="text-balance">Fionnuala Run Coach</span>
+          <span className="text-balance">GRAAFIN</span>
         </h1>
 
         <p
           className="animate-fade-up mt-3 max-w-xs text-center text-sm leading-relaxed text-muted-foreground"
           style={{ animationDelay: "0.4s" }}
         >
-          Marathon training tracked, analysed, and coached in one place.
+          Elite marathon cockpit and calm, evidence-based coach guidance.
         </p>
 
         {/* floating stat pills */}
@@ -218,12 +232,12 @@ export default function LoginPage() {
           style={{ animationDelay: "1.1s" }}
         >
           <p className="mb-4 text-xs font-semibold uppercase tracking-widest text-accent">
-            Get started in 3 steps
+            What happens next
           </p>
           <ol className="flex flex-col gap-3">
             <StepRow step={1} label="Sign in with Google" delay="1.25s" />
-            <StepRow step={2} label="Connect Strava" delay="1.4s" />
-            <StepRow step={3} label="Import training plan" delay="1.55s" />
+            <StepRow step={2} label="Strava sync runs automatically in the background" delay="1.4s" />
+            <StepRow step={3} label="Open Today cockpit and ask Coach" delay="1.55s" />
           </ol>
         </div>
 
@@ -232,7 +246,7 @@ export default function LoginPage() {
           className="animate-fade-in mt-8 text-center text-xs text-muted-foreground/50"
           style={{ animationDelay: "1.8s" }}
         >
-          Powered by Strava. Built for marathon runners.
+          Mobile-first. Coach-enabled. Built for marathon outcomes.
         </p>
       </div>
     </div>

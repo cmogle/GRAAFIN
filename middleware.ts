@@ -1,28 +1,10 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { updateSession } from "@/lib/supabase/middleware";
-import { createServerClient } from "@supabase/ssr";
 
 const protectedRoutes = ["/dashboard", "/coach", "/trends", "/query", "/plan", "/alerts", "/profile", "/onboarding"];
 
 export async function middleware(request: NextRequest) {
-  const response = await updateSession(request);
-
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-  if (!url || !anon) return response;
-
-  const supabase = createServerClient(url, anon, {
-    cookies: {
-      getAll() {
-        return request.cookies.getAll();
-      },
-      setAll() {},
-    },
-  });
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const { response, user } = await updateSession(request);
 
   const { pathname } = request.nextUrl;
   const isProtected = protectedRoutes.some((route) => pathname.startsWith(route));

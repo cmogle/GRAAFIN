@@ -7,7 +7,7 @@ export async function updateSession(request: NextRequest) {
 
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-  if (!url || !anon) return response;
+  if (!url || !anon) return { response, user: null };
   assertExpectedSupabaseProject(url);
 
   const supabase = createServerClient(url, anon, {
@@ -23,6 +23,9 @@ export async function updateSession(request: NextRequest) {
     },
   });
 
-  await supabase.auth.getUser();
-  return response;
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  return { response, user };
 }

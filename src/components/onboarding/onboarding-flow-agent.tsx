@@ -20,8 +20,8 @@ function nextStep(steps: OnboardingStep[]) {
 
 function nextAction(step: OnboardingStep | null) {
   if (!step) return { href: "/dashboard", label: "Open today cockpit" };
-  if (step.key === "strava") return { href: "/profile", label: "Open profile connections" };
-  if (step.key === "plan") return { href: "/plan", label: "Create first plan" };
+  if (step.key === "strava") return { href: "/dashboard", label: "Open today cockpit" };
+  if (step.key === "plan_optional") return { href: "/plan", label: "Set up a plan (optional)" };
   if (step.key === "coach") return { href: "/coach", label: "Start coach chat" };
   return { href: "/dashboard", label: "Open today cockpit" };
 }
