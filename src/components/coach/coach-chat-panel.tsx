@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useState, type KeyboardEvent } from "react";
-import { Send, Loader2, CircleAlert } from "lucide-react";
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
+import { CircleAlert, Loader2, Plus, Send } from "lucide-react";
 
 type ChatMessage = {
   id: string;
@@ -27,6 +27,7 @@ const quickPrompts = [
   "What should today's session focus on?",
   "Is my current training load sustainable?",
   "Give me one high-confidence adjustment for this week.",
+  "What should recovery look like after my run?",
 ];
 
 function normalizeContent(value: unknown): string {
@@ -63,13 +64,13 @@ function normalizeMessages(rawMessages: ThreadPayload["messages"]): ChatMessage[
       confidence: typeof raw.confidence === "number" ? raw.confidence : null,
       metadata: {
         suggestedActions: Array.isArray(metadataRaw?.suggestedActions)
-          ? metadataRaw?.suggestedActions.map((value) => normalizeContent(value)).filter(Boolean)
+          ? metadataRaw.suggestedActions.map((value) => normalizeContent(value)).filter(Boolean)
           : [],
         followUpQuestions: Array.isArray(metadataRaw?.followUpQuestions)
-          ? metadataRaw?.followUpQuestions.map((value) => normalizeContent(value)).filter(Boolean)
+          ? metadataRaw.followUpQuestions.map((value) => normalizeContent(value)).filter(Boolean)
           : [],
         riskFlags: Array.isArray(metadataRaw?.riskFlags)
-          ? metadataRaw?.riskFlags.map((value) => normalizeContent(value)).filter(Boolean)
+          ? metadataRaw.riskFlags.map((value) => normalizeContent(value)).filter(Boolean)
           : [],
       },
     };
@@ -83,6 +84,8 @@ export function CoachChatPanel() {
   const [loading, setLoading] = useState(false);
   const [booting, setBooting] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const scrollRef = useRef<HTMLDivElement | null>(null);
+  const composerRef = useRef<HTMLTextAreaElement | null>(null);
 
   useEffect(() => {
     const load = async () => {
@@ -113,6 +116,12 @@ export function CoachChatPanel() {
     };
     void load();
   }, []);
+
+  useEffect(() => {
+    const node = scrollRef.current;
+    if (!node) return;
+    node.scrollTo({ top: node.scrollHeight, behavior: "smooth" });
+  }, [messages, loading, booting]);
 
   const send = async (message: string) => {
     const trimmed = message.trim();
@@ -179,11 +188,6 @@ export function CoachChatPanel() {
     }
   };
 
-  const latestAssistant = useMemo(
-    () => [...messages].reverse().find((m) => m.role === "assistant"),
-    [messages],
-  );
-
   const onComposerKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
     if (event.key !== "Enter" || event.shiftKey || event.nativeEvent.isComposing) {
       return;
@@ -193,98 +197,162 @@ export function CoachChatPanel() {
     void send(input);
   };
 
+  const startNewChat = () => {
+    setThreadId(null);
+    setMessages([]);
+    setInput("");
+    setError(null);
+    localStorage.removeItem(CACHE_KEY);
+    composerRef.current?.focus();
+  };
+
+  const latestAssistant = useMemo(
+    () => [...messages].reverse().find((m) => m.role === "assistant"),
+    [messages],
+  );
+
   return (
-    <div className="space-y-4">
-      {error ? (
-        <p className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">{error}</p>
-      ) : null}
-
-      {booting ? (
-        <div className="flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-600">
-          <Loader2 className="h-4 w-4 animate-spin" />
-          Loading coach context...
+    <div className="flex h-[calc(100dvh-12.5rem)] min-h-[520px] flex-col overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm lg:h-[calc(100dvh-10.5rem)]">
+      <header className="flex items-center justify-between border-b border-slate-200 px-4 py-3">
+        <div>
+          <p className="text-sm font-semibold text-slate-900">GPT Coach</p>
+          <p className="text-xs text-slate-500">Evidence-based calm · suggest-only</p>
         </div>
-      ) : (
-        <div className="space-y-3">
-          {messages.length === 0 ? (
-            <div className="rounded-2xl border border-slate-200 bg-white p-4 text-sm text-slate-600">
-              Start a conversation with your coach. Guidance will use your current load, plan, and memory context.
-            </div>
-          ) : null}
-          {messages.map((message) => (
-            <article
-              key={message.id}
-              className={`rounded-2xl border px-4 py-3 text-sm ${
-                message.role === "user"
-                  ? "border-slate-200 bg-slate-900 text-white"
-                  : "border-slate-200 bg-white text-slate-800"
-              }`}
-            >
-              <p className="whitespace-pre-wrap">{message.content}</p>
-              {message.role === "assistant" && message.metadata?.riskFlags?.length ? (
-                <p className="mt-2 inline-flex items-center gap-1 text-xs text-amber-700">
-                  <CircleAlert className="h-3.5 w-3.5" />
-                  Risk flags: {message.metadata.riskFlags.join(", ")}
-                </p>
-              ) : null}
-              {message.role === "assistant" && message.metadata?.suggestedActions?.length ? (
-                <ul className="mt-2 grid gap-1 text-xs text-slate-600">
-                  {message.metadata.suggestedActions.map((action) => (
-                    <li key={action}>• {action}</li>
-                  ))}
-                </ul>
-              ) : null}
-            </article>
-          ))}
-        </div>
-      )}
-
-      {latestAssistant?.metadata?.followUpQuestions?.length ? (
-        <div className="grid gap-2">
-          {latestAssistant.metadata.followUpQuestions.map((question) => (
-            <button
-              key={question}
-              type="button"
-              onClick={() => setInput(question)}
-              className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-left text-xs text-slate-600 hover:bg-slate-50"
-            >
-              {question}
-            </button>
-          ))}
-        </div>
-      ) : null}
-
-      <div className="flex flex-wrap gap-2">
-        {quickPrompts.map((prompt) => (
-          <button
-            key={prompt}
-            type="button"
-            onClick={() => setInput(prompt)}
-            className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs text-slate-600 hover:bg-slate-50"
-          >
-            {prompt}
-          </button>
-        ))}
-      </div>
-
-      <div className="flex items-end gap-2">
-        <textarea
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          onKeyDown={onComposerKeyDown}
-          className="min-h-24 flex-1 rounded-2xl border border-slate-300 bg-white px-3 py-2 text-sm"
-          placeholder="Ask your coach anything about load, readiness, pacing, or plan decisions."
-        />
         <button
           type="button"
-          onClick={() => void send(input)}
-          disabled={loading || !input.trim()}
-          className="inline-flex min-h-12 min-w-12 items-center justify-center rounded-full bg-slate-900 text-white disabled:opacity-50"
-          aria-label="Send message"
+          onClick={startNewChat}
+          className="inline-flex min-h-10 items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 text-xs font-medium text-slate-700 hover:bg-slate-50"
         >
-          {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+          <Plus className="h-3.5 w-3.5" />
+          New chat
         </button>
+      </header>
+
+      <div ref={scrollRef} className="flex-1 overflow-y-auto px-3 py-4 sm:px-4">
+        <div className="mx-auto w-full max-w-3xl space-y-4">
+          {error ? (
+            <p className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">{error}</p>
+          ) : null}
+
+          {booting ? (
+            <div className="flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-600">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              Loading coach context...
+            </div>
+          ) : null}
+
+          {!booting && messages.length === 0 ? (
+            <div className="py-8 text-center">
+              <h2 className="text-2xl font-semibold tracking-tight text-slate-900">How can I help with today&apos;s training?</h2>
+              <p className="mx-auto mt-2 max-w-xl text-sm text-slate-600">
+                Ask about readiness, pacing, load management, or what session to prioritize next.
+              </p>
+              <div className="mx-auto mt-6 grid max-w-2xl gap-2 sm:grid-cols-2">
+                {quickPrompts.map((prompt) => (
+                  <button
+                    key={prompt}
+                    type="button"
+                    onClick={() => {
+                      setInput(prompt);
+                      composerRef.current?.focus();
+                    }}
+                    className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-left text-sm text-slate-700 hover:bg-slate-50"
+                  >
+                    {prompt}
+                  </button>
+                ))}
+              </div>
+            </div>
+          ) : null}
+
+          {!booting &&
+            messages.map((message) => (
+              <article key={message.id} className={`flex ${message.role === "user" ? "justify-end" : "justify-start"}`}>
+                <div
+                  className={
+                    message.role === "user"
+                      ? "max-w-[86%] rounded-3xl bg-slate-900 px-4 py-3 text-sm text-white"
+                      : "max-w-[92%] rounded-3xl bg-slate-100 px-4 py-3 text-sm text-slate-800"
+                  }
+                >
+                  {message.role !== "user" ? (
+                    <p className="mb-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500">Coach</p>
+                  ) : null}
+                  <p className="whitespace-pre-wrap leading-relaxed">{message.content}</p>
+                  {message.role === "assistant" && message.metadata?.riskFlags?.length ? (
+                    <p className="mt-2 inline-flex items-center gap-1 text-xs text-amber-700">
+                      <CircleAlert className="h-3.5 w-3.5" />
+                      Risk flags: {message.metadata.riskFlags.join(", ")}
+                    </p>
+                  ) : null}
+                  {message.role === "assistant" && message.metadata?.suggestedActions?.length ? (
+                    <div className="mt-2 flex flex-wrap gap-1.5">
+                      {message.metadata.suggestedActions.map((action) => (
+                        <span key={action} className="rounded-full border border-slate-300 px-2 py-1 text-xs text-slate-600">
+                          {action}
+                        </span>
+                      ))}
+                    </div>
+                  ) : null}
+                </div>
+              </article>
+            ))}
+
+          {loading ? (
+            <div className="flex justify-start">
+              <div className="inline-flex items-center gap-2 rounded-2xl bg-slate-100 px-3 py-2 text-sm text-slate-600">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Coach is thinking...
+              </div>
+            </div>
+          ) : null}
+        </div>
       </div>
+
+      <footer className="border-t border-slate-200 bg-white/95 px-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-3 sm:px-4">
+        <div className="mx-auto w-full max-w-3xl space-y-2">
+          {latestAssistant?.metadata?.followUpQuestions?.length ? (
+            <div className="flex gap-2 overflow-x-auto pb-1">
+              {latestAssistant.metadata.followUpQuestions.map((question) => (
+                <button
+                  key={question}
+                  type="button"
+                  onClick={() => {
+                    setInput(question);
+                    composerRef.current?.focus();
+                  }}
+                  className="whitespace-nowrap rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs text-slate-600 hover:bg-slate-50"
+                >
+                  {question}
+                </button>
+              ))}
+            </div>
+          ) : null}
+
+          <div className="rounded-2xl border border-slate-300 bg-white p-2 focus-within:border-slate-900">
+            <textarea
+              ref={composerRef}
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={onComposerKeyDown}
+              className="max-h-44 min-h-16 w-full resize-y bg-transparent px-2 py-1 text-sm outline-none"
+              placeholder="Message Coach..."
+            />
+            <div className="mt-2 flex items-center justify-between">
+              <p className="text-xs text-slate-400">Enter to send · Shift+Enter for newline</p>
+              <button
+                type="button"
+                onClick={() => void send(input)}
+                disabled={loading || !input.trim()}
+                className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-slate-900 text-white disabled:opacity-50"
+                aria-label="Send message"
+              >
+                {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+              </button>
+            </div>
+          </div>
+        </div>
+      </footer>
     </div>
   );
 }
