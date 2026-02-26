@@ -31,11 +31,23 @@ Implemented:
 - `/api/mobile/cockpit` – compact mobile payload
 - `/api/coach/chat` – orchestrated coach response
 - `/api/coach/thread` – thread/message history
+- `/api/coach/context` – resolved coach context snapshot
+- `/api/coach/state` – explicit context/state corrections
+- `/api/coach/blocks` – active + historical marathon block summaries
+- `/api/coach/eval` – conversational reliability eval suite
 - `/api/coach/memory` – memory list
 - `/api/coach/memory/:id` – memory update/delete
 - `/api/coach/checkin` – latest daily check-in
 - `/api/jobs/checkin-daily` – service cron route (token required)
 - `/api/jobs/strava-sync-daily` – service cron route for daily Strava sync (token required)
+- `/api/wellness/context` – aggregated sleep/nutrition context snapshot
+- `/api/wellness/garmin/status` – Garmin export connection status
+- `/api/wellness/garmin/connect` – connect/disconnect Garmin export mode
+- `/api/wellness/garmin/sync` – manual Garmin sync trigger (export-backed)
+- `/api/wellness/sleep` – sleep ingestion endpoint
+- `/api/wellness/nutrition` – nutrition ingestion endpoint
+- `/api/wellness/nutrition/recognize` – camera meal recognition status update endpoint
+- `/api/wellness/garmin/import` – Garmin Connect export wellness import (sleep + daily metrics, JSON/CSV)
 - `/api/health` – health check
 - `/api/query` – safe template query endpoint
 - `/api/sync/trigger` – manual sync trigger endpoint

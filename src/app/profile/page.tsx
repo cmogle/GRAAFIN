@@ -1,7 +1,10 @@
 import { AppShell } from "@/components/app-shell";
 import { SectionCard } from "@/components/section-card";
 import { MemoryCenter } from "@/components/coach/memory-center";
+import { CoachContextCenter } from "@/components/coach/coach-context-center";
+import { CoachEvalPanel } from "@/components/coach/coach-eval-panel";
 import { DataSyncControls } from "@/components/profile/data-sync-controls";
+import { WellnessInputsPanel } from "@/components/profile/wellness-inputs-panel";
 
 const services = [
   { name: "Google", status: "Connected" },
@@ -33,7 +36,19 @@ export default function ProfilePage() {
       </SectionCard>
 
       <SectionCard title="Coach memory center">
+        <CoachContextCenter />
+      </SectionCard>
+
+      <SectionCard title="Coach memory ledger">
         <MemoryCenter />
+      </SectionCard>
+
+      <SectionCard title="Coach conversational eval">
+        <CoachEvalPanel />
+      </SectionCard>
+
+      <SectionCard title="Wellness inputs (sleep + nutrition)">
+        <WellnessInputsPanel />
       </SectionCard>
     </AppShell>
   );

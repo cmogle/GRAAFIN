@@ -10,4 +10,10 @@ export const featureFlags = {
   coachV1: envFlag("FEATURE_COACH_V1", true),
   coachMemoryV1: envFlag("FEATURE_COACH_MEMORY_V1", true),
   dailyCheckinV1: envFlag("FEATURE_DAILY_CHECKIN_V1", true),
+  coachContextV2: envFlag("FEATURE_COACH_CONTEXT_V2", true),
+  coachBlocksV2: envFlag("FEATURE_COACH_BLOCKS_V2", true),
+  coachRouterV1: envFlag("FEATURE_COACH_ROUTER_V1", true),
+  coachEvidenceV1: envFlag("FEATURE_COACH_EVIDENCE_V1", true),
+  wellnessSleepV1: envFlag("FEATURE_WELLNESS_SLEEP_V1", true),
+  wellnessNutritionV1: envFlag("FEATURE_WELLNESS_NUTRITION_V1", true),
 };

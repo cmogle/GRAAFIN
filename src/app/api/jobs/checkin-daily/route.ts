@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { buildCockpitPayload } from "@/lib/mobile/cockpit";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { featureFlags } from "@/lib/feature-flags";
+import { loadOrBuildMarathonBlocks } from "@/lib/coach/blocks";
 
 function buildCheckinMessage(payload: Awaited<ReturnType<typeof buildCockpitPayload>>) {
   const focus = payload.quickInsights[0] ?? "Train consistently and keep quality controlled.";
@@ -82,6 +83,10 @@ export async function POST(request: NextRequest) {
           },
           { onConflict: "user_id,checkin_date" },
         );
+
+      if (featureFlags.coachBlocksV2) {
+        await loadOrBuildMarathonBlocks({ supabase: admin, userId });
+      }
       processed += 1;
     }
 

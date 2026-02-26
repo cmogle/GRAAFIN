@@ -1,5 +1,7 @@
 -- Mobile cockpit + GPT coach persistence schema
 -- Run in Supabase SQL editor (idempotent, RLS-enabled)
+-- For Coach Context/Blocks/Evidence v2 tables, also run:
+-- supabase/migrations/20260226160000_coach_intelligence_v2.sql
 
 create extension if not exists pgcrypto;
 
