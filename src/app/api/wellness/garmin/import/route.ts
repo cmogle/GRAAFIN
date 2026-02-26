@@ -122,6 +122,7 @@ export async function POST(request: NextRequest) {
 
   const sourceMetadata = {
     mode: "export_file",
+    connectedAt: new Date().toISOString(),
     lastFileName: file.name,
     lastImportedAt: new Date().toISOString(),
     importedSleepRecords: sleepRows.length,

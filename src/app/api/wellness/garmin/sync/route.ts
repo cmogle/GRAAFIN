@@ -8,6 +8,20 @@ function isGarminExportSource(metadata: unknown) {
   return record.providerName === "garmin_connect_export";
 }
 
+function toMetadata(metadata: unknown) {
+  if (!metadata || typeof metadata !== "object") return {} as Record<string, unknown>;
+  return metadata as Record<string, unknown>;
+}
+
+function hasGarminImportSignal(metadata: unknown) {
+  const record = toMetadata(metadata);
+  const importedAt = typeof record.lastImportedAt === "string" && record.lastImportedAt.trim().length > 0;
+  const importedSleep = Number(record.importedSleepRecords ?? 0) > 0;
+  const importedDaily = Number(record.importedDailyMetricRecords ?? 0) > 0;
+  const importedRaw = Number(record.importedRawRecords ?? 0) > 0;
+  return importedAt || importedSleep || importedDaily || importedRaw;
+}
+
 export async function POST() {
   if (!featureFlags.wellnessSleepV1 && !featureFlags.wellnessNutritionV1) {
     return NextResponse.json({ error: "Wellness features are disabled" }, { status: 404 });
@@ -25,12 +39,13 @@ export async function POST() {
     .eq("user_id", user.id);
   if (sourceError) return NextResponse.json({ error: sourceError.message }, { status: 500 });
   const source = (sourceRows ?? []).find((row) => row.provider === "other" && isGarminExportSource(row.metadata)) ?? null;
-  if (!source || source.status !== "connected") {
+  const importReady = hasGarminImportSignal(source?.metadata ?? null);
+  if (!source || source.status !== "connected" || !importReady) {
     return NextResponse.json(
       {
         ok: false,
         connected: false,
-        message: "Garmin export mode is not connected. Connect Garmin first.",
+        message: "Garmin export is not ready. Import a Garmin Connect export file first.",
       },
       { status: 400 },
     );

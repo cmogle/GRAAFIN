@@ -8,6 +8,20 @@ function isGarminExportSource(metadata: unknown) {
   return record.providerName === "garmin_connect_export";
 }
 
+function toMetadata(metadata: unknown) {
+  if (!metadata || typeof metadata !== "object") return {} as Record<string, unknown>;
+  return metadata as Record<string, unknown>;
+}
+
+function hasGarminImportSignal(metadata: unknown) {
+  const record = toMetadata(metadata);
+  const importedAt = typeof record.lastImportedAt === "string" && record.lastImportedAt.trim().length > 0;
+  const importedSleep = Number(record.importedSleepRecords ?? 0) > 0;
+  const importedDaily = Number(record.importedDailyMetricRecords ?? 0) > 0;
+  const importedRaw = Number(record.importedRawRecords ?? 0) > 0;
+  return importedAt || importedSleep || importedDaily || importedRaw;
+}
+
 export async function GET() {
   if (!featureFlags.wellnessSleepV1 && !featureFlags.wellnessNutritionV1) {
     return NextResponse.json({ error: "Wellness features are disabled" }, { status: 404 });
@@ -37,11 +51,16 @@ export async function GET() {
     });
   }
 
+  const metadata = toMetadata(source.metadata);
+  const importReady = hasGarminImportSignal(metadata);
+  const connected = source.status === "connected" && importReady;
+  const status = source.status === "connected" && !importReady ? "pending" : source.status;
+
   return NextResponse.json({
-    connected: source.status === "connected",
+    connected,
     provider: "garmin_connect_export",
-    status: source.status,
-    lastSyncedAt: source.last_synced_at == null ? null : String(source.last_synced_at),
-    metadata: source.metadata ?? {},
+    status,
+    lastSyncedAt: connected && source.last_synced_at != null ? String(source.last_synced_at) : null,
+    metadata,
   });
 }
