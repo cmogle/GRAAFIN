@@ -14,6 +14,11 @@ function parseBool(name, fallback = false) {
   return ["1", "true", "yes", "on"].includes(raw.toLowerCase());
 }
 
+function isMissingResourceError(error) {
+  const text = error instanceof Error ? error.message : String(error);
+  return text.includes("(404)") || text.includes("relation") || text.toLowerCase().includes("does not exist");
+}
+
 function normalizeBaseUrl(url) {
   return url.replace(/\/+$/, "");
 }
@@ -75,12 +80,14 @@ async function fetchBatch({
   start,
   end,
   orderExpr,
+  filters = [],
 }) {
+  const filterQuery = filters.length ? `&${filters.join("&")}` : "";
   const response = await restFetch({
     baseUrl,
     apiKey,
     path: table,
-    query: `select=*&order=${encodeURIComponent(orderExpr)}`,
+    query: `select=*&order=${encodeURIComponent(orderExpr)}${filterQuery}`,
     headers: {
       Range: `${start}-${end}`,
       Prefer: "count=exact",
@@ -96,6 +103,7 @@ async function fetchAllRows({
   table,
   batchSize,
   orderCandidates,
+  filters = [],
 }) {
   let workingOrder = orderCandidates[0];
   let validated = false;
@@ -111,6 +119,7 @@ async function fetchAllRows({
         start: 0,
         end: 0,
         orderExpr: candidate,
+        filters,
       });
       workingOrder = candidate;
       validated = true;
@@ -136,6 +145,7 @@ async function fetchAllRows({
       start,
       end,
       orderExpr: workingOrder,
+      filters,
     });
     if (!batch.length) break;
     rows.push(...batch);
@@ -171,15 +181,16 @@ async function countRows({
   baseUrl,
   apiKey,
   table,
+  filters = [],
 }) {
+  const filterQuery = filters.length ? `&${filters.join("&")}` : "";
   const response = await restFetch({
-    method: "GET",
+    method: "HEAD",
     baseUrl,
     apiKey,
     path: table,
-    query: "select=id",
+    query: `select=*${filterQuery}`,
     headers: {
-      Range: "0-0",
       Prefer: "count=exact",
     },
   });
@@ -207,6 +218,10 @@ async function main() {
   const sourceSyncStateTable = process.env.SOURCE_SYNC_STATE_TABLE?.trim() || "strava_sync_state";
   const targetActivityTable = process.env.TARGET_ACTIVITY_TABLE?.trim() || "strava_activities";
   const targetSyncStateTable = process.env.TARGET_SYNC_STATE_TABLE?.trim() || "strava_sync_state";
+  const skipSyncState = parseBool("MIGRATION_SKIP_SYNC_STATE", false);
+  const sourceAthleteId = (process.env.SOURCE_ATHLETE_ID || process.env.STRAVA_TARGET_ATHLETE_ID || "").trim();
+  const activityFilters = sourceAthleteId ? [`athlete_id=eq.${encodeURIComponent(sourceAthleteId)}`] : [];
+  const syncStateFilters = sourceAthleteId ? [`athlete_id=eq.${encodeURIComponent(sourceAthleteId)}`] : [];
 
   console.log(`[info] source project: ${projectRefFromUrl(sourceUrl)}`);
   console.log(`[info] target project: ${projectRefFromUrl(targetUrl)}`);
@@ -215,6 +230,8 @@ async function main() {
   console.log(`[info] source sync-state table: ${sourceSyncStateTable}`);
   console.log(`[info] target activity table: ${targetActivityTable}`);
   console.log(`[info] target sync-state table: ${targetSyncStateTable}`);
+  console.log(`[info] skip sync-state table: ${skipSyncState}`);
+  if (sourceAthleteId) console.log(`[info] source athlete filter: ${sourceAthleteId}`);
   if (dryRun) console.log("[info] dry run enabled (no writes)");
 
   const activities = await fetchAllRows({
@@ -223,6 +240,7 @@ async function main() {
     table: sourceActivityTable,
     batchSize,
     orderCandidates: ["start_date.asc,id.asc", "id.asc", "created_at.asc"],
+    filters: activityFilters,
   });
   console.log(`[info] fetched ${sourceActivityTable}: ${activities.length}`);
 
@@ -240,33 +258,75 @@ async function main() {
     }
   }
 
-  const syncStateRows = await fetchAllRows({
-    baseUrl: sourceUrl,
-    apiKey: sourceKey,
-    table: sourceSyncStateTable,
-    batchSize: Math.min(batchSize, 250),
-    orderCandidates: ["updated_at.asc", "last_success_at.asc", "created_at.asc", "id.asc"],
-  });
-  console.log(`[info] fetched ${sourceSyncStateTable}: ${syncStateRows.length}`);
+  let syncStateRows = [];
+  let sourceSyncCount = null;
+  let targetSyncCount = null;
 
-  if (!dryRun && syncStateRows.length) {
-    const allHaveId = syncStateRows.every((row) => Object.prototype.hasOwnProperty.call(row, "id") && row.id != null);
-    await upsertRows({
-      baseUrl: targetUrl,
-      apiKey: targetKey,
-      table: targetSyncStateTable,
-      rows: syncStateRows,
-      onConflict: allHaveId ? "id" : "",
-    });
-    console.log(`[info] migrated ${targetSyncStateTable} rows: ${syncStateRows.length}`);
+  if (!skipSyncState) {
+    try {
+      syncStateRows = await fetchAllRows({
+        baseUrl: sourceUrl,
+        apiKey: sourceKey,
+        table: sourceSyncStateTable,
+        batchSize: Math.min(batchSize, 250),
+        orderCandidates: ["updated_at.asc", "last_success_at.asc", "created_at.asc", "id.asc"],
+        filters: syncStateFilters,
+      });
+      console.log(`[info] fetched ${sourceSyncStateTable}: ${syncStateRows.length}`);
+    } catch (error) {
+      if (isMissingResourceError(error)) {
+        console.log(`[warn] source sync-state table not found (${sourceSyncStateTable}); skipping.`);
+      } else {
+        throw error;
+      }
+    }
+
+    if (!dryRun && syncStateRows.length) {
+      const syncStateOnConflict = process.env.TARGET_SYNC_STATE_ON_CONFLICT?.trim() || "";
+      try {
+        await upsertRows({
+          baseUrl: targetUrl,
+          apiKey: targetKey,
+          table: targetSyncStateTable,
+          rows: syncStateRows,
+          onConflict: syncStateOnConflict,
+        });
+        console.log(`[info] migrated ${targetSyncStateTable} rows: ${syncStateRows.length}`);
+      } catch (error) {
+        if (isMissingResourceError(error)) {
+          console.log(`[warn] target sync-state table not found (${targetSyncStateTable}); skipping write.`);
+        } else {
+          throw error;
+        }
+      }
+    }
   }
 
-  const [sourceActivityCount, targetActivityCount, sourceSyncCount, targetSyncCount] = await Promise.all([
-    countRows({ baseUrl: sourceUrl, apiKey: sourceKey, table: sourceActivityTable }),
-    countRows({ baseUrl: targetUrl, apiKey: targetKey, table: targetActivityTable }),
-    countRows({ baseUrl: sourceUrl, apiKey: sourceKey, table: sourceSyncStateTable }),
-    countRows({ baseUrl: targetUrl, apiKey: targetKey, table: targetSyncStateTable }),
-  ]);
+  const sourceActivityCount = await countRows({
+    baseUrl: sourceUrl,
+    apiKey: sourceKey,
+    table: sourceActivityTable,
+    filters: activityFilters,
+  });
+  const targetActivityCount = await countRows({ baseUrl: targetUrl, apiKey: targetKey, table: targetActivityTable });
+
+  if (!skipSyncState) {
+    try {
+      sourceSyncCount = await countRows({
+        baseUrl: sourceUrl,
+        apiKey: sourceKey,
+        table: sourceSyncStateTable,
+        filters: syncStateFilters,
+      });
+    } catch (error) {
+      if (!isMissingResourceError(error)) throw error;
+    }
+    try {
+      targetSyncCount = await countRows({ baseUrl: targetUrl, apiKey: targetKey, table: targetSyncStateTable });
+    } catch (error) {
+      if (!isMissingResourceError(error)) throw error;
+    }
+  }
 
   console.log("[done] migration summary");
   console.log(
