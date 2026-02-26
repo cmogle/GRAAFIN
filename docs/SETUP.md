@@ -6,6 +6,7 @@ Required env vars:
 - `NEXT_PUBLIC_SUPABASE_URL`
 - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
 - `SUPABASE_SERVICE_ROLE_KEY` (server-side only)
+- `EXPECTED_SUPABASE_PROJECT_REF` (recommended guardrail; set to your primary project ref)
 - `OPENAI_API_KEY` (for coach orchestration)
 - `CHECKIN_JOB_TOKEN` (for `/api/jobs/checkin-daily`)
 
@@ -70,7 +71,16 @@ See `docs/STRAVA_SYNC_METHODOLOGY.md` for the full sync contract and validation 
 
 Run:
 - `docs/SUPABASE_COACH_SCHEMA.sql`
+- `docs/SUPABASE_STRAVA_SCHEMA.sql` (if Strava tables are not present in this project)
 
 This enables:
 - mobile cockpit persistence tables (`activity_daily_facts`, `training_load_daily`)
 - GPT coach tables (`coach_threads`, `coach_messages`, `coach_memory_items`, `coach_checkins`, `coach_agent_traces`)
+
+## 7) Consolidation (legacy sync project -> primary project)
+
+If Strava data still lives in an older Supabase project, follow:
+- `docs/SUPABASE_CONSOLIDATION_RUNBOOK.md`
+
+One-shot migration script:
+- `node scripts/migrate-strava-data.mjs`

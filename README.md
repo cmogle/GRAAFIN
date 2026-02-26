@@ -57,6 +57,7 @@ See `.env.example` and `docs/SETUP.md`.
 ## Strava sync contract
 
 See `docs/STRAVA_SYNC_METHODOLOGY.md` for the current Strava/Garmin -> Supabase ingestion contract used by dashboard/query features.
+If migrating from a legacy Supabase project, use `docs/SUPABASE_CONSOLIDATION_RUNBOOK.md` and `scripts/migrate-strava-data.mjs`.
 
 ## Database setup
 

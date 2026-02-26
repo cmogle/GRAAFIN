@@ -1,4 +1,5 @@
 import { createClient } from "@supabase/supabase-js";
+import { assertExpectedSupabaseProject } from "@/lib/supabase/config";
 
 export function createAdminClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -12,6 +13,7 @@ export function createAdminClient() {
   if (missing.length) {
     throw new Error(`Missing Supabase admin env vars: ${missing.join(", ")}`);
   }
+  assertExpectedSupabaseProject(url as string);
 
   return createClient(url as string, serviceRoleKey as string, {
     auth: {

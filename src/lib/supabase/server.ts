@@ -1,5 +1,6 @@
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
+import { assertExpectedSupabaseProject } from "@/lib/supabase/config";
 
 export async function createClient() {
   const cookieStore = await cookies();
@@ -13,6 +14,7 @@ export async function createClient() {
   if (missing.length) {
     throw new Error(`Missing Supabase env vars (set in Vercel → Project → Settings → Environment Variables): ${missing.join(", ")}`);
   }
+  assertExpectedSupabaseProject(supabaseUrl as string);
 
   return createServerClient(supabaseUrl as string, supabaseAnonKey as string, {
     cookies: {

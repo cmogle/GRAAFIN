@@ -1,4 +1,5 @@
 import { createBrowserClient } from "@supabase/ssr";
+import { assertExpectedSupabaseProject } from "@/lib/supabase/config";
 
 export function createClient() {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -10,5 +11,6 @@ export function createClient() {
   if (missing.length) {
     throw new Error(`Missing Supabase env vars: ${missing.join(", ")}`);
   }
+  assertExpectedSupabaseProject(supabaseUrl as string);
   return createBrowserClient(supabaseUrl as string, supabaseAnonKey as string);
 }
