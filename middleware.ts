@@ -4,9 +4,20 @@ import { updateSession } from "@/lib/supabase/middleware";
 const protectedRoutes = ["/dashboard", "/coach", "/trends", "/query", "/plan", "/alerts", "/profile", "/onboarding"];
 
 export async function middleware(request: NextRequest) {
-  const { response, user } = await updateSession(request);
+  const { pathname, searchParams } = request.nextUrl;
 
-  const { pathname } = request.nextUrl;
+  // Some OAuth providers/Supabase fall back to SITE_URL and append `?code=...` on `/`.
+  // Ensure the auth code is always exchanged by routing through `/auth/callback`.
+  if (searchParams.has("code") && pathname !== "/auth/callback") {
+    const callbackUrl = request.nextUrl.clone();
+    callbackUrl.pathname = "/auth/callback";
+    if (!callbackUrl.searchParams.has("next")) {
+      callbackUrl.searchParams.set("next", pathname === "/" ? "/dashboard" : pathname);
+    }
+    return NextResponse.redirect(callbackUrl);
+  }
+
+  const { response, user } = await updateSession(request);
   const isProtected = protectedRoutes.some((route) => pathname.startsWith(route));
 
   if (!user && isProtected) {
