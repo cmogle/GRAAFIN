@@ -15,6 +15,12 @@ export async function GET(request: NextRequest) {
   const authErrorDescription = requestUrl.searchParams.get("error_description");
 
   if (authError) {
+    console.error("[auth-callback] provider returned error", {
+      error: authError,
+      description: authErrorDescription ?? null,
+      next,
+      host: requestUrl.host,
+    });
     const loginUrl = new URL("/login", requestUrl.origin);
     loginUrl.searchParams.set("next", next);
     loginUrl.searchParams.set(
@@ -28,12 +34,22 @@ export async function GET(request: NextRequest) {
     const supabase = await createClient();
     const { error } = await supabase.auth.exchangeCodeForSession(code);
     if (error) {
+      console.error("[auth-callback] exchangeCodeForSession failed", {
+        message: error.message,
+        next,
+        host: requestUrl.host,
+      });
       const loginUrl = new URL("/login", requestUrl.origin);
       loginUrl.searchParams.set("next", next);
       loginUrl.searchParams.set("error", error.message);
       return NextResponse.redirect(loginUrl);
     }
   } else {
+    console.error("[auth-callback] missing code in callback request", {
+      next,
+      host: requestUrl.host,
+      query: requestUrl.searchParams.toString(),
+    });
     const loginUrl = new URL("/login", requestUrl.origin);
     loginUrl.searchParams.set("next", next);
     loginUrl.searchParams.set("error", "Missing OAuth code. Check Supabase redirect URLs.");
