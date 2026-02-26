@@ -14,7 +14,9 @@
 - `STRAVA_SYNC_WEBHOOK_URL` — URL of the sync endpoint to call
 - `STRAVA_SYNC_WEBHOOK_TOKEN` — shared secret for the request
 
-**Local dev:** Vercel env vars are only used on Vercel. For `npm run dev` on localhost, use a `.env.local` file in the repo root with the same variable names (see `.env.example` for a template). Do not commit `.env.local`.
+**Vercel:** In the project → **Settings → Environment Variables**, add **both** `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY`. Apply them to **Production** and **Preview** (and Development if you use Vercel dev). Redeploy after adding or changing vars; existing deployments use the env from when they were built.
+
+**Local dev:** For `npm run dev` on localhost, use a `.env.local` file in the repo root with the same variable names (see `.env.example`). Do not commit `.env.local`.
 
 ## Completed
 

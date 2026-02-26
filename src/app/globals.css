@@ -1,24 +1,24 @@
 @import "tailwindcss";
 
 :root {
-  --background: #f8fafc;
-  --foreground: #0f172a;
+  --background: #f5f7f8;
+  --foreground: #0a1320;
   --card: #ffffff;
-  --card-foreground: #0f172a;
-  --muted: #f1f5f9;
-  --muted-foreground: #64748b;
-  --border: #e2e8f0;
-  --accent: #2563eb;
+  --card-foreground: #0a1320;
+  --muted: #eef3f8;
+  --muted-foreground: #4f6479;
+  --border: #d8e1ea;
+  --accent: #0f172a;
   --accent-foreground: #ffffff;
-  --accent-muted: #dbeafe;
-  --success: #059669;
-  --success-muted: #ecfdf5;
-  --warning: #d97706;
-  --warning-muted: #fffbeb;
-  --destructive: #dc2626;
-  --destructive-muted: #fef2f2;
-  --ring: #2563eb;
-  --radius: 0.75rem;
+  --accent-muted: #e2ecff;
+  --success: #0b8f55;
+  --success-muted: #edfdf4;
+  --warning: #b7791f;
+  --warning-muted: #fff7e8;
+  --destructive: #c63f3f;
+  --destructive-muted: #fff1f1;
+  --ring: #0f172a;
+  --radius: 0.9rem;
 }
 
 @theme inline {
@@ -39,13 +39,22 @@
   --color-destructive: var(--destructive);
   --color-destructive-muted: var(--destructive-muted);
   --color-ring: var(--ring);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --font-sans: var(--font-space-grotesk);
+  --font-mono: var(--font-jetbrains-mono);
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
+  text-rendering: optimizeLegibility;
+}
+
+a,
+button,
+input,
+textarea,
+select {
+  touch-action: manipulation;
 }
 
 * {
@@ -127,4 +136,15 @@ body {
 }
 .animate-float {
   animation: float 3s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }

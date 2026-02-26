@@ -11,6 +11,8 @@ const eslintConfig = defineConfig([
     ".next/**",
     "out/**",
     "build/**",
+    // Generated legacy build artifacts.
+    "dist/**",
     "next-env.d.ts",
   ]),
 ]);

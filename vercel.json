@@ -1,0 +1,12 @@
+{
+  "crons": [
+    {
+      "path": "/api/jobs/strava-sync-daily",
+      "schedule": "0 4 * * *"
+    },
+    {
+      "path": "/api/jobs/checkin-daily",
+      "schedule": "10 4 * * *"
+    }
+  ]
+}

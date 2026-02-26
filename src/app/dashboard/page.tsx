@@ -1,20 +1,11 @@
+import { redirect } from "next/navigation";
 import { AppShell } from "@/components/app-shell";
 import { SectionCard } from "@/components/section-card";
 import { ActivitiesTable } from "@/components/dashboard/activities-table";
-import { CoachPanel } from "@/components/dashboard/coach-panel";
-import { MetricCard } from "@/components/dashboard/metric-card";
-import { NarrativeHeader } from "@/components/dashboard/narrative-header";
 import { TrendChart } from "@/components/dashboard/trend-chart";
-import { MarathonBlockExplorer } from "@/components/dashboard/marathon-block-explorer";
-import {
-  classifyRunType,
-  formatPace,
-  marathonBlockPatterns,
-  paceSecPerKm,
-  RunActivity,
-  runTypeEvolution,
-  weeklyDistanceTrend,
-} from "@/lib/metrics/dashboard";
+import { FloatingActions } from "@/components/mobile/floating-actions";
+import { buildCockpitPayload } from "@/lib/mobile/cockpit";
+import { RunActivity, paceSecPerKm, formatPace } from "@/lib/metrics/dashboard";
 import { createClient } from "@/lib/supabase/server";
 
 function mapRun(row: Record<string, unknown>): RunActivity {
@@ -31,118 +22,114 @@ function mapRun(row: Record<string, unknown>): RunActivity {
 
 export default async function DashboardPage() {
   const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) redirect("/login");
 
-  const { data } = await supabase
-    .from("strava_activities")
-    .select("id,name,type,start_date,distance_m,moving_time_s,average_speed,average_heartrate")
-    .eq("type", "Run")
-    .order("start_date", { ascending: false })
-    .limit(900);
+  const [{ data }, cockpit] = await Promise.all([
+    supabase
+      .from("strava_activities")
+      .select("id,name,type,start_date,distance_m,moving_time_s,average_speed,average_heartrate")
+      .eq("type", "Run")
+      .order("start_date", { ascending: false })
+      .limit(100),
+    buildCockpitPayload({ supabase, userId: user.id }),
+  ]);
 
   const runs = (data ?? []).map((row) => mapRun(row as Record<string, unknown>));
-  const weeklyDistance = runs.reduce((sum, r) => sum + r.distanceM, 0) / 1000;
-  const avgPace = runs.length ? runs.reduce((sum, r) => sum + paceSecPerKm(r), 0) / runs.length : 0;
-
-  const trendRows = weeklyDistanceTrend(runs, 8).map((r) => ({ week: r.week.slice(5), distanceKm: r.distanceKm }));
-  const evolution = runTypeEvolution(runs);
-  const marathonPatterns = marathonBlockPatterns(runs);
-
-  const baselineWeekly = trendRows.slice(0, -1).length
-    ? trendRows.slice(0, -1).reduce((s, r) => s + Number(r.distanceKm), 0) / trendRows.slice(0, -1).length
-    : Number(trendRows[trendRows.length - 1]?.distanceKm ?? 0);
-  const latestWeekly = Number(trendRows[trendRows.length - 1]?.distanceKm ?? 0);
-  const weeklyDelta = baselineWeekly > 0 ? ((latestWeekly - baselineWeekly) / baselineWeekly) * 100 : 0;
-
-  const easyVsHard = runs.reduce(
-    (acc, run) => {
-      const type = classifyRunType(run);
-      if (type === "short") acc.easy += 1;
-      else if (type === "tempo") acc.moderate += 1;
-      else acc.hard += 1;
-      return acc;
-    },
-    { easy: 0, moderate: 0, hard: 0 },
-  );
-
-  const recommendation = latestWeekly > baselineWeekly * 1.2
-    ? "Take next run easy (45-60min zone-2). Keep intensity low after this load bump."
-    : "Proceed with a quality session: 20-30min steady tempo after warm-up.";
+  const avgPacePool = runs.slice(0, 20).map((run) => paceSecPerKm(run)).filter((pace) => pace > 0);
+  const avgPace = avgPacePool.length
+    ? avgPacePool.reduce((sum, pace) => sum + pace, 0) / avgPacePool.length
+    : 0;
 
   return (
     <AppShell>
-      <NarrativeHeader
-        phase="Marathon build"
-        summary={`Last 8 weeks show ${latestWeekly.toFixed(1)} km this week vs ${baselineWeekly.toFixed(1)} km 7-week baseline. Focus today: durable aerobic quality.`}
-      />
-
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <MetricCard
-          label="Weekly distance"
-          value={`${latestWeekly.toFixed(1)} km`}
-          delta={weeklyDelta}
-          interpretation="Compared to trailing 7-week average"
-        />
-        <MetricCard
-          label="8-week distance"
-          value={`${weeklyDistance.toFixed(0)} km`}
-          interpretation="Total run volume in selected window"
-        />
-        <MetricCard
-          label="Average pace"
-          value={formatPace(avgPace)}
-          interpretation="Across all runs in current analysis window"
-        />
-        <MetricCard
-          label="Intensity split"
-          value={`${easyVsHard.easy}/${easyVsHard.moderate}/${easyVsHard.hard}`}
-          interpretation="Easy / moderate / hard session count"
-        />
-      </div>
-
-      <div className="grid gap-4 xl:grid-cols-3">
-        <div className="xl:col-span-2">
-          <TrendChart
-            title="Distance trend (last 8 weeks)"
-            data={trendRows}
-            xKey="week"
-            lines={[{ key: "distanceKm", color: "#0f172a", name: "Weekly km" }]}
-          />
-        </div>
-        <CoachPanel
-          recommendation={recommendation}
-          warning={latestWeekly > baselineWeekly * 1.2 ? "Load spike detected (>20% above baseline)." : null}
-          confidence={runs.length > 16 ? "High" : "Medium"}
-        />
-      </div>
-
-      <TrendChart
-        title="Run-type evolution (latest vs historical baseline)"
-        data={evolution.map((e) => ({
-          type: e.type,
-          latestPace: Math.round(e.latestPaceSecPerKm / 60),
-          baselinePace: Math.round(e.baselinePaceSecPerKm / 60),
-          latestHr: e.latestHr ?? null,
-          baselineHr: e.baselineHr,
-        }))}
-        xKey="type"
-        lines={[
-          { key: "latestPace", color: "#0f766e", name: "Latest pace (min/km)" },
-          { key: "baselinePace", color: "#475569", name: "Baseline pace (min/km)" },
-          { key: "latestHr", color: "#dc2626", name: "Latest HR" },
-          { key: "baselineHr", color: "#fb7185", name: "Baseline HR" },
-        ]}
-      />
-
-      <SectionCard title="Marathon-block pattern explorer (auto-filtered)">
-        <p className="mb-3 text-sm text-slate-600">
-          Showing true marathon race blocks only. July 2025 marathon-distance anomaly is excluded automatically.
+      <section className="rounded-3xl border border-slate-200/80 bg-white px-4 py-5 shadow-sm">
+        <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-400">Today cockpit</p>
+        <h1 className="mt-1 text-2xl font-semibold text-slate-900">Readiness {cockpit.readiness.score.toFixed(0)}</h1>
+        <p className="mt-1 text-sm text-slate-600">
+          Status {cockpit.readiness.status} · confidence {cockpit.readiness.confidence.toFixed(0)}% · load ratio {cockpit.readiness.loadRatio.toFixed(2)}
         </p>
-        <MarathonBlockExplorer blocks={marathonPatterns} />
-      </SectionCard>
+      </section>
 
-      <SectionCard title="Recent activities">
+      <div className="grid gap-4 lg:grid-cols-2">
+        <SectionCard title="Today's session">
+          {cockpit.todayPlan.workouts.length ? (
+            <ul className="space-y-2">
+              {cockpit.todayPlan.workouts.map((workout) => (
+                <li key={workout.id} className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">
+                  <p className="font-medium text-slate-900">{workout.name}</p>
+                  <p>
+                    {workout.distanceKm ? `${workout.distanceKm.toFixed(1)} km` : "distance n/a"} ·{" "}
+                    {workout.durationMin ? `${workout.durationMin} min` : "duration n/a"} ·{" "}
+                    {workout.intensity ?? "intensity n/a"}
+                  </p>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="text-sm text-slate-600">No workout scheduled for today yet.</p>
+          )}
+        </SectionCard>
+
+        <SectionCard title="Coach quick actions">
+          <p className="mb-2 text-sm text-slate-600">Instant actions tuned for today’s load context.</p>
+          <div className="flex flex-wrap gap-2">
+            <a href="/coach" className="rounded-xl bg-slate-900 px-3 py-2 text-sm font-medium text-white">
+              Ask coach
+            </a>
+            <a href="/plan#plan-workout-form" className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700">
+              Log workout
+            </a>
+          </div>
+          <ul className="mt-4 space-y-2 text-sm text-slate-700">
+            {cockpit.quickInsights.map((insight) => (
+              <li key={insight}>• {insight}</li>
+            ))}
+          </ul>
+        </SectionCard>
+      </div>
+
+      <div className="grid gap-4 lg:grid-cols-2">
+        <TrendChart
+          title="Load trend (14 days)"
+          data={cockpit.loadTrend.map((point) => ({
+            day: point.date.slice(5),
+            readiness: point.readinessScore,
+            acute: Number(point.acuteLoad.toFixed(1)),
+            chronic: Number(point.chronicLoad.toFixed(1)),
+          }))}
+          xKey="day"
+          lines={[
+            { key: "readiness", color: "#0f172a", name: "Readiness" },
+            { key: "acute", color: "#0f766e", name: "Acute load 7d" },
+            { key: "chronic", color: "#64748b", name: "Chronic load 42d" },
+          ]}
+        />
+        <SectionCard title="Current signals">
+          <div className="grid gap-2 text-sm text-slate-700 sm:grid-cols-2">
+            <p>Acute load: <strong>{cockpit.readiness.acuteLoad.toFixed(1)}</strong></p>
+            <p>Chronic load: <strong>{cockpit.readiness.chronicLoad.toFixed(1)}</strong></p>
+            <p>Monotony: <strong>{cockpit.readiness.monotony.toFixed(2)}</strong></p>
+            <p>Strain: <strong>{cockpit.readiness.strain.toFixed(1)}</strong></p>
+            <p>Avg pace (20 recent runs): <strong>{formatPace(avgPace)}</strong></p>
+            <p>Generated: <strong>{new Date(cockpit.generatedAt).toLocaleTimeString()}</strong></p>
+          </div>
+          {cockpit.checkinPreview ? (
+            <div className="mt-4 rounded-xl bg-slate-50 p-3 text-sm text-slate-700">
+              <p className="mb-1 text-xs uppercase tracking-wide text-slate-400">Latest check-in ({cockpit.checkinPreview.date})</p>
+              <p>{cockpit.checkinPreview.body}</p>
+            </div>
+          ) : null}
+        </SectionCard>
+      </div>
+
+      <SectionCard title="Recent run history">
         <ActivitiesTable runs={runs} />
       </SectionCard>
+
+      <FloatingActions />
     </AppShell>
   );
 }

@@ -1,11 +1,13 @@
 import { AppShell } from "@/components/app-shell";
 import { SectionCard } from "@/components/section-card";
+import { MemoryCenter } from "@/components/coach/memory-center";
+import { DataSyncControls } from "@/components/profile/data-sync-controls";
 
 const services = [
   { name: "Google", status: "Connected" },
   { name: "Strava", status: "Connected" },
   { name: "Supabase", status: "Active" },
-  { name: "OpenAI", status: "Not configured" },
+  { name: "OpenAI", status: process.env.OPENAI_API_KEY ? "Configured" : "Not configured" },
 ];
 
 export default function ProfilePage() {
@@ -25,6 +27,13 @@ export default function ProfilePage() {
             </div>
           ))}
         </div>
+        <div className="mt-3">
+          <DataSyncControls />
+        </div>
+      </SectionCard>
+
+      <SectionCard title="Coach memory center">
+        <MemoryCenter />
       </SectionCard>
     </AppShell>
   );

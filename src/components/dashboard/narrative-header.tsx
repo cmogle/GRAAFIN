@@ -1,5 +1,3 @@
-import { SyncTriggerButton } from "@/components/sync-trigger-button";
-
 export function NarrativeHeader({
   summary,
   phase,
@@ -21,7 +19,12 @@ export function NarrativeHeader({
         >
           View this week’s plan
         </a>
-        <SyncTriggerButton />
+        <a
+          href="/coach"
+          className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
+        >
+          Ask coach
+        </a>
       </div>
     </div>
   );

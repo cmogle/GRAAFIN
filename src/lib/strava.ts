@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 
 type AnyRow = Record<string, unknown>;
+const SYNC_DATE_KEYS = ["last_success_at", "last_synced_at", "synced_at", "updated_at"] as const;
 
 function pickDate(row: AnyRow | null | undefined, keys: string[]): string | null {
   if (!row) return null;
@@ -9,6 +10,34 @@ function pickDate(row: AnyRow | null | undefined, keys: string[]): string | null
     if (typeof v === "string" && v.length > 0) return v;
   }
   return null;
+}
+
+function asEpochMs(value: unknown): number | null {
+  if (typeof value !== "string" || value.length === 0) return null;
+  const ms = Date.parse(value);
+  return Number.isFinite(ms) ? ms : null;
+}
+
+function latestSyncRow(rows: AnyRow[] | null | undefined): AnyRow | null {
+  if (!rows?.length) return null;
+
+  let chosen: AnyRow | null = null;
+  let chosenMs = Number.NEGATIVE_INFINITY;
+
+  for (const row of rows) {
+    const bestForRow = SYNC_DATE_KEYS.reduce((best, key) => {
+      const candidate = asEpochMs(row[key]);
+      if (candidate == null) return best;
+      return Math.max(best, candidate);
+    }, Number.NEGATIVE_INFINITY);
+
+    if (bestForRow > chosenMs) {
+      chosen = row;
+      chosenMs = bestForRow;
+    }
+  }
+
+  return chosen;
 }
 
 export async function getStravaStatus() {
@@ -21,16 +50,11 @@ export async function getStravaStatus() {
       .order("start_date", { ascending: false })
       .limit(1)
       .maybeSingle(),
-    supabase.from("strava_sync_state").select("*").limit(1),
+    supabase.from("strava_sync_state").select("*").limit(25),
   ]);
 
-  const syncRow = (syncRows?.[0] as AnyRow | undefined) ?? null;
-  const lastSuccessfulSyncAt = pickDate(syncRow, [
-    "last_success_at",
-    "last_synced_at",
-    "synced_at",
-    "updated_at",
-  ]);
+  const syncRow = latestSyncRow((syncRows as AnyRow[] | null | undefined) ?? null);
+  const lastSuccessfulSyncAt = pickDate(syncRow, [...SYNC_DATE_KEYS]);
 
   const connected = Boolean(latestActivity);
 
