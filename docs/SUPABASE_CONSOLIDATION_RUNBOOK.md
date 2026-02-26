@@ -36,12 +36,20 @@ node scripts/migrate-strava-data.mjs
 
 ## 3) Repoint strava-sync writer to fazdb...
 
-In your `strava-sync` deployment environment (Render/Railway/etc):
-- set `SUPABASE_URL=https://fazdbecnxwgkvbxwlrfn.supabase.co`
-- set `SUPABASE_SERVICE_ROLE_KEY=<fazdb service role key>`
-- redeploy the sync service
+For `cmogle/strava-sync` (GitHub Actions workflow):
+- in GitHub repo secrets, set `SUPABASE_URL=https://fazdbecnxwgkvbxwlrfn.supabase.co`
+- set `SUPABASE_SERVICE_KEY=<fazdb service role key>`
 
-Do not change `STRAVA_SYNC_WEBHOOK_URL` in GRAAFIN unless the endpoint URL itself changed.
+In GRAAFIN runtime env:
+- set `STRAVA_SYNC_TRIGGER_MODE=github`
+- set `STRAVA_SYNC_GITHUB_TOKEN=<token with workflow dispatch permission>`
+- optional defaults:
+  - `STRAVA_SYNC_GITHUB_OWNER=cmogle`
+  - `STRAVA_SYNC_GITHUB_REPO=strava-sync`
+  - `STRAVA_SYNC_GITHUB_WORKFLOW=fionnuala-manual-sync.yml`
+  - `STRAVA_SYNC_GITHUB_REF=main`
+
+If you use a non-GitHub sync service, keep `STRAVA_SYNC_TRIGGER_MODE=webhook` and `STRAVA_SYNC_WEBHOOK_URL`.
 
 ## 4) Confirm GRAAFIN runtime points to fazdb...
 

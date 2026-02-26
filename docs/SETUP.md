@@ -23,33 +23,51 @@ Dashboard status is currently inferred from Supabase data:
 - **Last successful sync**: read from `strava_sync_state` (best-effort column detection)
 - **Latest activity summary**: latest row in `strava_activities`
 
-## 3) Manual sync trigger env vars
+## 3) Sync trigger backend env vars
 
-### `STRAVA_SYNC_WEBHOOK_URL`
-This must be an HTTP endpoint that triggers your sync pipeline (`strava-sync`).
+GRAAFIN supports two remote trigger backends:
+- **GitHub Actions workflow dispatch** (recommended for `cmogle/strava-sync`)
+- **HTTP webhook** (if you run a sync service endpoint)
 
-Where to get it:
-- If `strava-sync` is deployed as a web service/job endpoint, use that URL.
-- If not deployed yet, create a small endpoint in `strava-sync` (e.g. `/sync/trigger`) and deploy it (Render/Railway/Fly/Vercel serverless/etc.).
+Core selector:
+- `STRAVA_SYNC_TRIGGER_MODE=auto|github|webhook` (default `auto`)
 
-### `STRAVA_SYNC_WEBHOOK_TOKEN`
-Shared secret you define yourself.
+### Option A: GitHub workflow dispatch (recommended)
 
-Where to get it:
-- Generate a random token (e.g. `openssl rand -hex 32`)
-- Set same token in both places:
-  - GRAAFIN env: `STRAVA_SYNC_WEBHOOK_TOKEN`
-  - strava-sync service env (for auth validation)
+Required:
+- `STRAVA_SYNC_GITHUB_TOKEN` (PAT or fine-grained token with actions/workflow dispatch permission on `cmogle/strava-sync`)
 
-Example expected behavior:
-- GRAAFIN calls `POST STRAVA_SYNC_WEBHOOK_URL` with optional `Authorization: Bearer <token>`
-- strava-sync validates token, kicks job, returns 200
-- GRAAFIN times out trigger requests after 12s and surfaces upstream status on failures
+Optional (defaults shown):
+- `STRAVA_SYNC_GITHUB_OWNER=cmogle`
+- `STRAVA_SYNC_GITHUB_REPO=strava-sync`
+- `STRAVA_SYNC_GITHUB_WORKFLOW=fionnuala-manual-sync.yml`
+- `STRAVA_SYNC_GITHUB_REF=main`
+
+Behavior:
+- GRAAFIN calls GitHub API:
+  - `POST /repos/{owner}/{repo}/actions/workflows/{workflow}/dispatches`
+- Uses `sync_mode` input:
+  - `incremental` by default
+  - `full` when `force=true` is passed
+
+### Option B: HTTP webhook
+
+Required:
+- `STRAVA_SYNC_WEBHOOK_URL`
+
+Optional:
+- `STRAVA_SYNC_WEBHOOK_TOKEN` (sent as Bearer token)
+
+Behavior:
+- GRAAFIN sends `POST STRAVA_SYNC_WEBHOOK_URL`
+- Times out after 12s and returns upstream status/body preview on failures
+
+App behavior (same for both backends):
 - App launch auto-triggers sync in the background with smart throttling:
   - client cooldown: 20 minutes
   - server hard floor: 3 minutes
   - server app-launch soft cooldown: 30 minutes unless activity looks stale
-- Manual override is available in `Profile -> Connected services -> Advanced data sync controls`
+- Manual override is in `Profile -> Connected services -> Advanced data sync controls`
 - Daily fallback cron route: `POST /api/jobs/strava-sync-daily` with `CHECKIN_JOB_TOKEN`
 
 ## 4) Current DB assumptions

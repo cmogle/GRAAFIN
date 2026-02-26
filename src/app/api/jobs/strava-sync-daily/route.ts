@@ -1,17 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
+import { triggerRemoteStravaSync } from "@/lib/sync/remote-trigger";
 
 function matchesServiceToken(request: NextRequest, expected: string) {
   const bearer = request.headers.get("authorization");
   if (bearer?.startsWith("Bearer ") && bearer.slice(7) === expected) return true;
   const tokenHeader = request.headers.get("x-job-token");
   return tokenHeader === expected;
-}
-
-async function responsePreview(resp: Response): Promise<string | null> {
-  const text = await resp.text().catch(() => "");
-  const trimmed = text.trim();
-  if (!trimmed) return null;
-  return trimmed.length > 220 ? `${trimmed.slice(0, 220)}...` : trimmed;
 }
 
 export async function POST(request: NextRequest) {
@@ -23,37 +17,23 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const webhookUrl = process.env.STRAVA_SYNC_WEBHOOK_URL;
-  const webhookToken = process.env.STRAVA_SYNC_WEBHOOK_TOKEN;
-  if (!webhookUrl) {
-    return NextResponse.json(
-      { error: "STRAVA_SYNC_WEBHOOK_URL is required for daily sync jobs." },
-      { status: 500 },
-    );
-  }
+  const remote = await triggerRemoteStravaSync({
+    source: "daily-cron-08-gst",
+    force: false,
+  });
 
-  const response = await fetch(webhookUrl, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      ...(webhookToken ? { Authorization: `Bearer ${webhookToken}` } : {}),
-    },
-    body: JSON.stringify({ source: "daily-cron-08-gst" }),
-    signal: AbortSignal.timeout(12_000),
-  }).catch(() => null);
-
-  if (!response || !response.ok) {
-    const preview = response ? await responsePreview(response) : null;
+  if (!remote.ok) {
     return NextResponse.json(
       {
         ok: false,
-        message: "Daily Strava sync trigger did not confirm success.",
-        remoteStatus: response?.status ?? null,
-        remoteBodyPreview: preview,
+        message: remote.message,
+        remoteChannel: remote.channel,
+        remoteStatus: remote.remoteStatus,
+        remoteBodyPreview: remote.remoteBodyPreview,
       },
       { status: 502 },
     );
   }
 
-  return NextResponse.json({ ok: true });
+  return NextResponse.json({ ok: true, message: remote.message, remoteChannel: remote.channel });
 }

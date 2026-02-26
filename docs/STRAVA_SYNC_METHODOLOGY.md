@@ -8,7 +8,7 @@ This documents the current contract between GRAAFIN and the external `strava-syn
 2. `strava-sync` fetches activities from Strava API.
 3. `strava-sync` writes/upserts activity rows into Supabase.
 4. GRAAFIN reads Supabase tables for dashboard/query views.
-5. GRAAFIN can request a sync run through `POST /api/sync/trigger` (webhook to `strava-sync`).
+5. GRAAFIN can request a sync run through `POST /api/sync/trigger` (GitHub workflow dispatch or webhook trigger backend).
 
 `strava-sync` is external to this repo. This repo only triggers it and reads resulting data.
 
@@ -41,15 +41,13 @@ Recommended ingestion behavior:
 ## Manual trigger contract
 `POST /api/sync/trigger` in GRAAFIN:
 - Requires authenticated user.
-- Sends `POST` to `STRAVA_SYNC_WEBHOOK_URL`.
-- Sends optional `Authorization: Bearer <STRAVA_SYNC_WEBHOOK_TOKEN>`.
-- Body: `{ "requestedBy": "<supabase-user-id>", "source": "graafin-web" }`
+- Supports two trigger backends:
+  - GitHub workflow dispatch (`STRAVA_SYNC_GITHUB_*` env vars)
+  - Webhook (`STRAVA_SYNC_WEBHOOK_URL` + optional bearer token)
 - Uses a 12s timeout and surfaces upstream status/body preview on failures.
 
-Expected `strava-sync` behavior:
-- Validate bearer token if configured.
-- Enqueue or execute sync.
-- Return 2xx if request accepted.
+For `cmogle/strava-sync`:
+- Recommended backend is GitHub workflow dispatch of `fionnuala-manual-sync.yml`.
 
 ## Dashboard analytics currently driven by this data
 - Distance trend (last 8 weeks).

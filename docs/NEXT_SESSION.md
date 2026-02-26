@@ -9,10 +9,18 @@
 - `NEXT_PUBLIC_SUPABASE_URL` — project URL (e.g. `https://<project-ref>.supabase.co`)
 - `NEXT_PUBLIC_SUPABASE_ANON_KEY` — public anon key (safe for client; RLS enforces security)
 
-**Strava sync (for manual sync / webhook):**
+**Strava sync trigger backend (manual/app-launch trigger path):**
 
-- `STRAVA_SYNC_WEBHOOK_URL` — URL of the sync endpoint to call
-- `STRAVA_SYNC_WEBHOOK_TOKEN` — shared secret for the request
+- `STRAVA_SYNC_TRIGGER_MODE` — `auto`, `github`, or `webhook`
+- `STRAVA_SYNC_GITHUB_TOKEN` — token to dispatch `cmogle/strava-sync` workflow (recommended)
+- Optional defaults:
+  - `STRAVA_SYNC_GITHUB_OWNER=cmogle`
+  - `STRAVA_SYNC_GITHUB_REPO=strava-sync`
+  - `STRAVA_SYNC_GITHUB_WORKFLOW=fionnuala-manual-sync.yml`
+  - `STRAVA_SYNC_GITHUB_REF=main`
+- Webhook mode only:
+  - `STRAVA_SYNC_WEBHOOK_URL`
+  - `STRAVA_SYNC_WEBHOOK_TOKEN`
 
 **Vercel:** In the project → **Settings → Environment Variables**, add **both** `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY`. Apply them to **Production** and **Preview** (and Development if you use Vercel dev). Redeploy after adding or changing vars; existing deployments use the env from when they were built.
 

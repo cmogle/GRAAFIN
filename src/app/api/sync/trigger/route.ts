@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { getStravaStatus } from "@/lib/strava";
+import { triggerRemoteStravaSync } from "@/lib/sync/remote-trigger";
 
 const HARD_MIN_SYNC_INTERVAL_MS = 3 * 60 * 1000;
 const APP_LAUNCH_SYNC_INTERVAL_MS = 30 * 60 * 1000;
@@ -10,13 +11,6 @@ type TriggerRequest = {
   source?: string;
   force?: boolean;
 };
-
-async function responsePreview(resp: Response): Promise<string | null> {
-  const text = await resp.text().catch(() => "");
-  const trimmed = text.trim();
-  if (!trimmed) return null;
-  return trimmed.length > 220 ? `${trimmed.slice(0, 220)}...` : trimmed;
-}
 
 function isLikelyNewActivityGap(status: Awaited<ReturnType<typeof getStravaStatus>>) {
   const latestStartDate = status.latestActivity?.startDate;
@@ -74,37 +68,21 @@ export async function POST(request: Request) {
     );
   }
 
-  const webhookUrl = process.env.STRAVA_SYNC_WEBHOOK_URL;
-  const webhookToken = process.env.STRAVA_SYNC_WEBHOOK_TOKEN;
+  const remote = await triggerRemoteStravaSync({
+    requestedBy: user.id,
+    source,
+    force,
+  });
 
-  if (!webhookUrl) {
-    return NextResponse.json({
-      ok: false,
-      message:
-        "Manual trigger not configured yet. Set STRAVA_SYNC_WEBHOOK_URL to wire this button to your strava-sync job.",
-      lastSuccessfulSyncAt: status.lastSuccessfulSyncAt,
-    });
-  }
-
-  const resp = await fetch(webhookUrl, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      ...(webhookToken ? { Authorization: `Bearer ${webhookToken}` } : {}),
-    },
-    body: JSON.stringify({ requestedBy: user.id, source }),
-    signal: AbortSignal.timeout(12_000),
-  }).catch(() => null);
-
-  if (!resp || !resp.ok) {
-    const preview = resp ? await responsePreview(resp) : null;
+  if (!remote.ok) {
     return NextResponse.json(
       {
         ok: false,
-        message: "Sync trigger request sent but remote job did not confirm success.",
+        message: remote.message,
         lastSuccessfulSyncAt: status.lastSuccessfulSyncAt,
-        remoteStatus: resp?.status ?? null,
-        remoteBodyPreview: preview,
+        remoteChannel: remote.channel,
+        remoteStatus: remote.remoteStatus,
+        remoteBodyPreview: remote.remoteBodyPreview,
       },
       { status: 502 },
     );
@@ -112,7 +90,8 @@ export async function POST(request: Request) {
 
   return NextResponse.json({
     ok: true,
-    message: "Manual sync request accepted.",
+    message: remote.message,
+    remoteChannel: remote.channel,
     lastSuccessfulSyncAt: status.lastSuccessfulSyncAt,
   });
 }
