@@ -16,4 +16,5 @@ export const featureFlags = {
   coachEvidenceV1: envFlag("FEATURE_COACH_EVIDENCE_V1", true),
   wellnessSleepV1: envFlag("FEATURE_WELLNESS_SLEEP_V1", true),
   wellnessNutritionV1: envFlag("FEATURE_WELLNESS_NUTRITION_V1", true),
+  wellnessMorningVoiceV1: envFlag("FEATURE_WELLNESS_MORNING_VOICE_V1", false),
 };

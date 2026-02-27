@@ -21,6 +21,7 @@ Run:
 - `POST /api/wellness/sleep`
 - `POST /api/wellness/nutrition`
 - `POST /api/wellness/nutrition/recognize`
+- `POST /api/wellness/morning-report` (voice-first morning capture)
 
 ## Coach integration
 
@@ -39,3 +40,20 @@ Current behavior is a pipeline placeholder:
 1. Nutrition entries with `photoUrl` are created with `recognition_status='pending'`.
 2. `/api/wellness/nutrition/recognize` updates recognized items and flips status to `processed`.
 3. Vision model integration can later replace the manual recognizer update call without schema changes.
+
+## Morning voice capture (v1)
+
+1. Entry points:
+   - `/wellness` -> `Start Morning Capture`
+   - top menu -> `Morning capture`
+2. Route: `/wellness/morning`
+3. Capture sequence (Performance 7): sleep duration, sleep score, readiness, HRV, resting HR, steps, recovery hours.
+4. Voice behavior:
+   - auto-listen and auto-advance on valid input
+   - voice command `skip` stores null
+   - voice command `back` returns to previous step
+   - keyboard entry is always available as fallback
+5. Persistence:
+   - upserts to `wellness_sleep_sessions` (`source='manual'`)
+   - upserts to `wellness_daily_metrics` (`source='manual_voice'`)
+   - marks `raw_data.capture_method='voice_morning_v1'`
