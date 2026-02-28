@@ -174,49 +174,64 @@ export function toSeasonalHeatmap(
   return cells;
 }
 
-export type YearOverlayPoint = {
-  week: number;
-  [year: string]: number | null;
+export type ContinuousTrendPoint = {
+  date: string; // "YYYY-WW"
+  label: string; // "Jan '24"
+  value: number | null;
+  rolling: number | null;
 };
 
-export function toYearOverYearSeries(
+export function toContinuousTrend(
   metrics: DailyMetricRow[],
   sleep: SleepRow[],
   metricKey: MetricKey,
-): { data: YearOverlayPoint[]; years: number[] } {
+  rollingWindowWeeks: number = 8,
+): ContinuousTrendPoint[] {
   const sleepMap = buildSleepMap(sleep);
-  // Bucket by (year, week) → average
-  const buckets = new Map<string, { sum: number; count: number }>();
-  const yearsSet = new Set<number>();
+  const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+  // Bucket by ISO week → average
+  const buckets = new Map<string, { sum: number; count: number; firstDate: string }>();
 
   for (const row of metrics) {
     const val = getMetricValue(row, sleepMap, metricKey);
     if (val == null) continue;
     const { year, week } = isoWeek(row.metric_date);
-    yearsSet.add(year);
-    const key = `${year}-${week}`;
+    const key = `${year}-${String(week).padStart(2, "0")}`;
     const existing = buckets.get(key);
     if (existing) {
       existing.sum += val;
       existing.count += 1;
+      if (row.metric_date < existing.firstDate) existing.firstDate = row.metric_date;
     } else {
-      buckets.set(key, { sum: val, count: 1 });
+      buckets.set(key, { sum: val, count: 1, firstDate: row.metric_date });
     }
   }
 
-  const years = Array.from(yearsSet).sort();
-  const data: YearOverlayPoint[] = [];
+  // Sort by week key and build the series
+  const sorted = Array.from(buckets.entries()).sort(([a], [b]) => a.localeCompare(b));
 
-  for (let w = 1; w <= 53; w++) {
-    const point: YearOverlayPoint = { week: w };
-    for (const year of years) {
-      const bucket = buckets.get(`${year}-${w}`);
-      point[String(year)] = bucket ? Math.round((bucket.sum / bucket.count) * 10) / 10 : null;
+  const points: ContinuousTrendPoint[] = sorted.map(([key, bucket]) => {
+    const d = new Date(bucket.firstDate);
+    return {
+      date: key,
+      label: `${MONTHS[d.getUTCMonth()]} '${String(d.getUTCFullYear()).slice(2)}`,
+      value: Math.round((bucket.sum / bucket.count) * 10) / 10,
+      rolling: null,
+    };
+  });
+
+  // Compute rolling average
+  for (let i = 0; i < points.length; i++) {
+    const windowStart = Math.max(0, i - rollingWindowWeeks + 1);
+    const window = points.slice(windowStart, i + 1).filter((p) => p.value != null);
+    if (window.length >= 3) {
+      points[i].rolling =
+        Math.round((window.reduce((s, p) => s + p.value!, 0) / window.length) * 10) / 10;
     }
-    data.push(point);
   }
 
-  return { data, years };
+  return points;
 }
 
 // ---------------------------------------------------------------------------
@@ -359,33 +374,50 @@ export type RecoveryEvent = {
 export function toRecoveryEvents(
   weeklyData: WeeklyTrainingWellness[],
 ): RecoveryEvent[] {
-  if (weeklyData.length < 8) return [];
+  if (weeklyData.length < 6) return [];
 
   const events: RecoveryEvent[] = [];
 
-  for (let i = 4; i < weeklyData.length - 3; i++) {
-    const trailing4 = weeklyData.slice(i - 4, i);
-    const trailingAvg = trailing4.reduce((s, w) => s + w.weeklyLoadScore, 0) / 4;
+  for (let i = 3; i < weeklyData.length - 2; i++) {
+    const trailing = weeklyData.slice(Math.max(0, i - 3), i);
+    const trailingAvg = trailing.reduce((s, w) => s + w.weeklyLoadScore, 0) / trailing.length;
     if (trailingAvg < 1) continue;
 
     const current = weeklyData[i];
     const spikePct = ((current.weeklyLoadScore - trailingAvg) / trailingAvg) * 100;
 
-    // Only consider spikes > 20%
-    if (spikePct < 20) continue;
+    // Only consider spikes > 15%
+    if (spikePct < 15) continue;
 
-    // Find recovery: how many weeks until resting HR returns to trailing average
-    const preHr = trailing4.filter((w) => w.restingHrAvg != null).map((w) => w.restingHrAvg!);
-    if (preHr.length < 2) continue;
-    const baselineHr = preHr.reduce((s, v) => s + v, 0) / preHr.length;
+    // Try body battery first (better coverage), fall back to resting HR
+    const preBB = trailing.filter((w) => w.bodyBatteryAvg != null).map((w) => w.bodyBatteryAvg!);
+    const preHr = trailing.filter((w) => w.restingHrAvg != null).map((w) => w.restingHrAvg!);
 
     let recoveryWeeks = 0;
-    for (let j = i + 1; j < Math.min(i + 8, weeklyData.length); j++) {
-      recoveryWeeks++;
-      if (weeklyData[j].restingHrAvg != null && weeklyData[j].restingHrAvg! <= baselineHr + 1) {
-        break;
+
+    if (preBB.length >= 1) {
+      // Body battery recovery: how long until it returns to baseline
+      const baselineBB = preBB.reduce((s, v) => s + v, 0) / preBB.length;
+      for (let j = i + 1; j < Math.min(i + 6, weeklyData.length); j++) {
+        recoveryWeeks++;
+        if (weeklyData[j].bodyBatteryAvg != null && weeklyData[j].bodyBatteryAvg! >= baselineBB - 2) {
+          break;
+        }
       }
+    } else if (preHr.length >= 1) {
+      // Resting HR recovery: how long until it returns to baseline
+      const baselineHr = preHr.reduce((s, v) => s + v, 0) / preHr.length;
+      for (let j = i + 1; j < Math.min(i + 6, weeklyData.length); j++) {
+        recoveryWeeks++;
+        if (weeklyData[j].restingHrAvg != null && weeklyData[j].restingHrAvg! <= baselineHr + 1) {
+          break;
+        }
+      }
+    } else {
+      continue; // No recovery signal available
     }
+
+    if (recoveryWeeks === 0) continue;
 
     const yearMatch = current.week.match(/^(\d{4})/);
     events.push({

@@ -37,6 +37,20 @@ export function TrainingWellnessOverlay({
   // Thin out labels: show every ~8 weeks
   const labelInterval = Math.max(1, Math.floor(data.length / 30));
 
+  // Find the first index where any wellness data exists — default brush to that range
+  const wellnessStartIdx = useMemo(() => {
+    for (let i = 0; i < data.length; i++) {
+      if (
+        data[i].restingHrAvg != null ||
+        data[i].hrvAvg != null ||
+        data[i].bodyBatteryAvg != null
+      ) {
+        return Math.max(0, i - 4); // Start a bit before the first wellness data
+      }
+    }
+    return 0;
+  }, [data]);
+
   // Determine right Y-axis domain from visible lines
   const rightDomain = useMemo(() => {
     let min = Infinity;
@@ -144,6 +158,8 @@ export function TrainingWellnessOverlay({
               stroke="#94a3b8"
               fill="#f8fafc"
               travellerWidth={8}
+              startIndex={wellnessStartIdx}
+              endIndex={data.length - 1}
             />
           </ComposedChart>
         </ResponsiveContainer>

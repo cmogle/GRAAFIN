@@ -4,7 +4,7 @@ import { useState, useMemo } from "react";
 import { SectionCard } from "@/components/section-card";
 import { MetricSelector } from "@/components/analysis/metric-selector";
 import { SeasonalHeatmap } from "@/components/analysis/seasonal-heatmap";
-import { YearOverlayChart } from "@/components/analysis/year-overlay-chart";
+import { ContinuousTrendChart } from "@/components/analysis/year-overlay-chart";
 import { TrainingWellnessOverlay } from "@/components/analysis/training-wellness-overlay";
 import { RecoveryScatter } from "@/components/analysis/recovery-scatter";
 import { CorrelationMatrix } from "@/components/analysis/correlation-matrix";
@@ -19,7 +19,7 @@ import {
   CORRELATION_METRICS,
   METRIC_LABELS,
   toSeasonalHeatmap,
-  toYearOverYearSeries,
+  toContinuousTrend,
   toWeeklyTrainingWellness,
   toRecoveryEvents,
   computeCorrelationMatrix,
@@ -55,8 +55,8 @@ export function AnalysisDashboard({ metrics, sleep, loadFacts, athleteId }: Prop
     const s = new Set(heatmapCells.map((c) => c.year));
     return [...s].sort();
   }, [heatmapCells]);
-  const yearOverlay = useMemo(
-    () => toYearOverYearSeries(metrics, sleep, heatmapMetric),
+  const continuousTrend = useMemo(
+    () => toContinuousTrend(metrics, sleep, heatmapMetric),
     [metrics, sleep, heatmapMetric],
   );
 
@@ -144,11 +144,10 @@ export function AnalysisDashboard({ metrics, sleep, loadFacts, athleteId }: Prop
         />
         <div className="mt-6">
           <h4 className="mb-2 text-sm font-medium text-slate-700">
-            Year-over-year overlay: {METRIC_LABELS[heatmapMetric]}
+            Full timeline: {METRIC_LABELS[heatmapMetric]}
           </h4>
-          <YearOverlayChart
-            data={yearOverlay.data}
-            years={yearOverlay.years}
+          <ContinuousTrendChart
+            data={continuousTrend}
             metricLabel={METRIC_LABELS[heatmapMetric]}
           />
         </div>

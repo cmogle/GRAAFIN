@@ -6,7 +6,7 @@ type OpenAIResult = { text: string; model: string; usage: Record<string, number>
 async function callOpenAI({
   system,
   user,
-  model = "gpt-4o-mini",
+  model = "gpt-4.1-mini",
   maxOutputTokens = 1200,
 }: {
   system: string;
@@ -150,7 +150,7 @@ export async function POST(req: NextRequest) {
     const sqlResult = await callOpenAI({
       system: systemWithIds,
       user: question,
-      model: "gpt-4o-mini",
+      model: "gpt-4.1-mini",
     });
 
     let parsed: { sql?: string; explanation?: string; followUpQuestions?: string[] };
@@ -237,7 +237,7 @@ export async function POST(req: NextRequest) {
         results: Array.isArray(queryResults) ? queryResults.slice(0, 50) : queryResults,
         resultCount: Array.isArray(queryResults) ? queryResults.length : 1,
       }),
-      model: "gpt-4o-mini",
+      model: "gpt-4.1-mini",
       maxOutputTokens: 800,
     });
 
