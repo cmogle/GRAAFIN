@@ -13,6 +13,8 @@ export type GarminSleepImportRecord = {
   hrv: number | null;
   sleepScore: number | null;
   readinessScore: number | null;
+  sleepQuality: string | null;
+  sleepNeedMin: number | null;
   raw: RawRecord;
   rowHash: string;
 };
@@ -23,22 +25,41 @@ export type GarminDailyMetricImportRecord = {
   distanceKm: number | null;
   caloriesTotal: number | null;
   caloriesActive: number | null;
+  caloriesResting: number | null;
   intensityMinutes: number | null;
+  intensityMinutesWeek: number | null;
   restingHr: number | null;
+  restingHr7dAvg: number | null;
   avgHr: number | null;
   minHr: number | null;
   maxHr: number | null;
   hrv: number | null;
+  hrvStatus: string | null;
+  hrvOvernight: number | null;
+  hrv5minHigh: number | null;
   stressAvg: number | null;
   stressMax: number | null;
+  stressRestMin: number | null;
+  stressLowMin: number | null;
+  stressMediumMin: number | null;
+  stressHighMin: number | null;
   bodyBatteryAvg: number | null;
   bodyBatteryMin: number | null;
   bodyBatteryMax: number | null;
+  bbCharged: number | null;
+  bbDrained: number | null;
   respirationAvg: number | null;
+  respirationSleepAvg: number | null;
+  respirationLow: number | null;
+  respirationHigh: number | null;
   spo2Avg: number | null;
+  spo2SleepAvg: number | null;
   trainingReadiness: number | null;
+  trainingReadinessStatus: string | null;
   recoveryHours: number | null;
   vo2Max: number | null;
+  steps7dAvg: number | null;
+  floorsUp: number | null;
   raw: RawRecord;
   rowHash: string;
 };
@@ -208,6 +229,8 @@ function mapSleepRecord(record: RawRecord): GarminSleepImportRecord | null {
     hrv: toNumber(pick(record, ["hrv", "avghrv", "overnighthrv"])),
     sleepScore: toNumber(pick(record, ["sleepscore", "overallsleepscore", "score"])),
     readinessScore: toNumber(pick(record, ["readinessscore", "bodybattery", "recoveryscore"])),
+    sleepQuality: pick(record, ["sleepquality", "quality"]) as string | null,
+    sleepNeedMin: minutesFrom(pick(record, ["sleepneedmin", "sleepneed", "targetsleepminutes"])),
     raw: record,
     rowHash: rowHash(record),
   };
@@ -239,22 +262,41 @@ function mapDailyMetricsRecord(record: RawRecord): GarminDailyMetricImportRecord
     distanceKm: kmFrom(pick(record, ["distancekm", "distance", "totaldistance"])),
     caloriesTotal: toNumber(pick(record, ["caloriestotal", "calories", "totalcalories"])),
     caloriesActive: toNumber(pick(record, ["activecalories", "activekilocalories"])),
+    caloriesResting: toNumber(pick(record, ["caloriesresting", "restingcalories"])),
     intensityMinutes: minutesFrom(pick(record, ["intensityminutes", "vigorousminutes", "activeminutes"])),
+    intensityMinutesWeek: toNumber(pick(record, ["intensityminutesweek", "weeklyintensityminutes"])),
     restingHr: toNumber(pick(record, ["restinghr", "restingheartrate"])),
+    restingHr7dAvg: toNumber(pick(record, ["restinghr7davg", "restingheartrate7dayavg"])),
     avgHr: toNumber(pick(record, ["avghr", "averageheartrate"])),
     minHr: toNumber(pick(record, ["minhr", "minimumheartrate"])),
     maxHr: toNumber(pick(record, ["maxhr", "maximumheartrate"])),
     hrv,
+    hrvStatus: pick(record, ["hrvstatus"]) as string | null,
+    hrvOvernight: toNumber(pick(record, ["hrvovernight", "overnighthrv"])),
+    hrv5minHigh: toNumber(pick(record, ["hrv5minhigh", "hrv5minutehigh"])),
     stressAvg,
     stressMax: toNumber(pick(record, ["stressmax", "maxstresslevel"])),
+    stressRestMin: toNumber(pick(record, ["stressrestmin", "restminutes"])),
+    stressLowMin: toNumber(pick(record, ["stresslowmin", "lowstressminutes"])),
+    stressMediumMin: toNumber(pick(record, ["stressmediummin", "mediumstressminutes"])),
+    stressHighMin: toNumber(pick(record, ["stresshighmin", "highstressminutes"])),
     bodyBatteryAvg,
     bodyBatteryMin: toNumber(pick(record, ["bodybatterymin", "minbodybattery"])),
     bodyBatteryMax: toNumber(pick(record, ["bodybatterymax", "maxbodybattery"])),
+    bbCharged: toNumber(pick(record, ["bbcharged", "bodybatterycharged"])),
+    bbDrained: toNumber(pick(record, ["bbdrained", "bodybatterydrained"])),
     respirationAvg: toNumber(pick(record, ["respirationavg", "avgrespiration"])),
+    respirationSleepAvg: toNumber(pick(record, ["respirationsleepavg", "sleeprespiration"])),
+    respirationLow: toNumber(pick(record, ["respirationlow", "lowrespiration"])),
+    respirationHigh: toNumber(pick(record, ["respirationhigh", "highrespiration"])),
     spo2Avg: toNumber(pick(record, ["spo2avg", "avgspo2", "pulseoxavg"])),
+    spo2SleepAvg: toNumber(pick(record, ["spo2sleepavg", "sleepspo2"])),
     trainingReadiness,
+    trainingReadinessStatus: pick(record, ["trainingreadinessstatus", "readinessstatus"]) as string | null,
     recoveryHours: toNumber(pick(record, ["recoveryhours", "recoverytimehours"])),
     vo2Max: toNumber(pick(record, ["vo2max", "vo2maxvalue"])),
+    steps7dAvg: toNumber(pick(record, ["steps7davg", "stepcount7dayavg"])),
+    floorsUp: toNumber(pick(record, ["floorsup", "floorsclimbed"])),
     raw: record,
     rowHash: rowHash(record),
   };

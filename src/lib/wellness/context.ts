@@ -6,6 +6,7 @@ export type WellnessSnapshot = {
     totalSleepMin: number | null;
     sleepScore: number | null;
     readinessScore: number | null;
+    sleepQuality: string | null;
     restingHr: number | null;
     hrv: number | null;
   } | null;
@@ -22,12 +23,19 @@ export type WellnessSnapshot = {
     date: string | null;
     steps: number | null;
     hrv: number | null;
+    hrvOvernight: number | null;
+    hrvStatus: string | null;
     stressAvg: number | null;
+    stressHighMin: number | null;
     bodyBatteryAvg: number | null;
+    bbCharged: number | null;
+    bbDrained: number | null;
     trainingReadiness: number | null;
+    trainingReadinessStatus: string | null;
     recoveryHours: number | null;
     vo2Max: number | null;
     restingHr: number | null;
+    restingHr7dAvg: number | null;
   } | null;
   dataQuality: "none" | "partial" | "good";
   riskFlags: string[];
@@ -65,7 +73,7 @@ export async function buildWellnessSnapshot({
     const [sleepQuery, nutritionQuery, dailyQuery] = await Promise.all([
       supabase
         .from("wellness_sleep_sessions")
-        .select("sleep_date,total_sleep_min,sleep_score,readiness_score,resting_hr,hrv")
+        .select("sleep_date,total_sleep_min,sleep_score,readiness_score,sleep_quality,resting_hr,hrv")
         .eq("user_id", userId)
         .gte("sleep_date", startOfDayIso(new Date(Date.now() - 48 * 60 * 60 * 1000)).slice(0, 10))
         .order("sleep_date", { ascending: false })
@@ -79,7 +87,7 @@ export async function buildWellnessSnapshot({
         .limit(120),
       supabase
         .from("wellness_daily_metrics")
-        .select("metric_date,steps,hrv,stress_avg,body_battery_avg,training_readiness,recovery_hours,vo2_max,resting_hr")
+        .select("metric_date,steps,hrv,hrv_overnight,hrv_status,stress_avg,stress_high_min,body_battery_avg,bb_charged,bb_drained,training_readiness,training_readiness_status,recovery_hours,vo2_max,resting_hr,resting_hr_7d_avg")
         .eq("user_id", userId)
         .gte("metric_date", startOfDayIso(new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)).slice(0, 10))
         .order("metric_date", { ascending: false })
@@ -95,6 +103,7 @@ export async function buildWellnessSnapshot({
             totalSleepMin: toNumber(sleepRow.total_sleep_min),
             sleepScore: toNumber(sleepRow.sleep_score),
             readinessScore: toNumber(sleepRow.readiness_score),
+            sleepQuality: sleepRow.sleep_quality == null ? null : String(sleepRow.sleep_quality),
             restingHr: toNumber(sleepRow.resting_hr),
             hrv: toNumber(sleepRow.hrv),
           };
@@ -121,12 +130,19 @@ export async function buildWellnessSnapshot({
             date: dailyRow.metric_date == null ? null : String(dailyRow.metric_date),
             steps: toNumber(dailyRow.steps),
             hrv: toNumber(dailyRow.hrv),
+            hrvOvernight: toNumber(dailyRow.hrv_overnight),
+            hrvStatus: dailyRow.hrv_status == null ? null : String(dailyRow.hrv_status),
             stressAvg: toNumber(dailyRow.stress_avg),
+            stressHighMin: toNumber(dailyRow.stress_high_min),
             bodyBatteryAvg: toNumber(dailyRow.body_battery_avg),
+            bbCharged: toNumber(dailyRow.bb_charged),
+            bbDrained: toNumber(dailyRow.bb_drained),
             trainingReadiness: toNumber(dailyRow.training_readiness),
+            trainingReadinessStatus: dailyRow.training_readiness_status == null ? null : String(dailyRow.training_readiness_status),
             recoveryHours: toNumber(dailyRow.recovery_hours),
             vo2Max: toNumber(dailyRow.vo2_max),
             restingHr: toNumber(dailyRow.resting_hr),
+            restingHr7dAvg: toNumber(dailyRow.resting_hr_7d_avg),
           };
 
     const riskFlags: string[] = [];
@@ -153,14 +169,22 @@ export async function buildWellnessSnapshot({
 
     if (dailyMetrics) {
       if ((dailyMetrics.hrv ?? 999) < 35) riskFlags.push("hrv_low");
+      if (dailyMetrics.hrvStatus === "LOW" || dailyMetrics.hrvStatus === "UNBALANCED") riskFlags.push("hrv_status_concern");
       if ((dailyMetrics.stressAvg ?? 0) > 55) riskFlags.push("stress_high");
+      if ((dailyMetrics.stressHighMin ?? 0) > 120) riskFlags.push("stress_high_duration");
       if ((dailyMetrics.bodyBatteryAvg ?? 100) < 40) riskFlags.push("body_battery_low");
+      if ((dailyMetrics.bbDrained ?? 0) > 80 && (dailyMetrics.bbCharged ?? 100) < 30) riskFlags.push("body_battery_net_negative");
       if ((dailyMetrics.trainingReadiness ?? 100) < 40) riskFlags.push("training_readiness_low");
+      if (dailyMetrics.trainingReadinessStatus === "Poor" || dailyMetrics.trainingReadinessStatus === "Low") riskFlags.push("training_readiness_status_concern");
       if ((dailyMetrics.recoveryHours ?? 0) > 36) riskFlags.push("recovery_demand_high");
 
       if ((dailyMetrics.hrv ?? 999) < 40) insights.push("HRV is suppressed versus typical healthy range; keep quality conservative until trend stabilizes.");
+      if (dailyMetrics.hrvStatus && dailyMetrics.hrvStatus !== "BALANCED") insights.push(`HRV status is ${dailyMetrics.hrvStatus}; monitor trends over the next few days.`);
       if ((dailyMetrics.stressAvg ?? 0) > 50) insights.push("Average stress is elevated; watch perceived effort drift in planned sessions.");
       if ((dailyMetrics.bodyBatteryAvg ?? 100) < 45) insights.push("Body Battery trend is low; prioritize sleep and fueling before key workouts.");
+      if (dailyMetrics.trainingReadinessStatus && dailyMetrics.trainingReadinessStatus !== "Prime" && dailyMetrics.trainingReadinessStatus !== "High") {
+        insights.push(`Training readiness is ${dailyMetrics.trainingReadinessStatus}; consider adjusting session intensity.`);
+      }
     } else {
       insights.push("No daily wellness metrics imported yet (HRV/stress/body battery/readiness).");
     }

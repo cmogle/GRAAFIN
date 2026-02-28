@@ -8,6 +8,7 @@ import {
   loadEvidenceItems,
 } from "@/lib/coach/context";
 import { loadOrBuildMarathonBlocks } from "@/lib/coach/blocks";
+import { deriveAdaptationSnapshot } from "@/lib/coach/learning";
 
 export async function GET() {
   if (!featureFlags.coachV1) {
@@ -43,6 +44,18 @@ export async function GET() {
       ? loadEvidenceItems({ supabase, userId: user.id, topicHint: "marathon", limit: 4 })
       : Promise.resolve([]),
   ]);
+  let adaptation = null as Awaited<ReturnType<typeof deriveAdaptationSnapshot>> | null;
+  if (featureFlags.coachWorkbenchV1) {
+    try {
+      adaptation = await deriveAdaptationSnapshot({
+        supabase,
+        userId: user.id,
+        raceDate: objective?.goalRaceDate ?? null,
+      });
+    } catch {
+      adaptation = null;
+    }
+  }
 
   return NextResponse.json({
     threadId,
@@ -52,6 +65,7 @@ export async function GET() {
     activeBlock: blockContext.activeBlock,
     blocks: blockContext.blocks,
     evidencePreview: evidenceItems,
+    adaptation,
     generatedAt: new Date().toISOString(),
   });
 }

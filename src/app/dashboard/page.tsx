@@ -3,6 +3,7 @@ import { AppShell } from "@/components/app-shell";
 import { SectionCard } from "@/components/section-card";
 import { ActivitiesTable } from "@/components/dashboard/activities-table";
 import { TrendChart } from "@/components/dashboard/trend-chart";
+import { AdaptiveWorkbench } from "@/components/dashboard/adaptive-workbench";
 import { FloatingActions } from "@/components/mobile/floating-actions";
 import { buildCockpitPayload } from "@/lib/mobile/cockpit";
 import { RunActivity, paceSecPerKm, formatPace } from "@/lib/metrics/dashboard";
@@ -127,6 +128,8 @@ export default async function DashboardPage() {
           ) : null}
         </SectionCard>
       </div>
+
+      <AdaptiveWorkbench cockpit={cockpit} />
 
       <SectionCard title="Recent run history">
         <ActivitiesTable runs={runs} />

@@ -9,6 +9,8 @@ import {
   shouldCompareBlocks,
   inferStateUpdate,
 } from "@/lib/coach/intelligence";
+import { deriveSeasonPhase } from "@/lib/coach/learning";
+import { getModuleCandidates } from "@/lib/coach/workbench";
 
 type EvalCaseResult = {
   id: string;
@@ -167,6 +169,39 @@ export function runCoachEvalSuite(): EvalSuiteResult {
       scenario.items[1]?.outageDays === 7 &&
       scenario.items[2]?.outageDays === 14,
     details: scenario.items.map((item) => `${item.outageDays}d:${item.riskLevel}`).join(", "),
+  });
+
+  const raceWeekDate = new Date(Date.now() + 8 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+  const phase = deriveSeasonPhase(raceWeekDate);
+  results.push({
+    id: "learning_season_phase",
+    title: "Learning season phase maps near-race dates to race_week",
+    passed: phase === "race_week",
+    details: `raceDate=${raceWeekDate}, phase=${phase}`,
+  });
+
+  const injuryModules = getModuleCandidates({
+    intent: "injury_adaptation",
+    riskFlags: ["medical_hold"],
+    seasonPhase: "build",
+  });
+  results.push({
+    id: "workbench_module_ranking_injury",
+    title: "Injury learning candidates include risk and scenario modules",
+    passed: injuryModules.includes("risk_banner") && injuryModules.includes("scenario_planner"),
+    details: injuryModules.join(", "),
+  });
+
+  const taperModules = getModuleCandidates({
+    intent: "race_strategy",
+    riskFlags: [],
+    seasonPhase: "taper",
+  });
+  results.push({
+    id: "workbench_module_ranking_taper",
+    title: "Taper learning candidates include block/readiness modules",
+    passed: taperModules.includes("block_progress") && taperModules.includes("readiness_focus"),
+    details: taperModules.join(", "),
   });
 
   const passed = results.filter((result) => result.passed).length;

@@ -18,6 +18,7 @@ import {
   upsertConversationState,
   upsertPrimaryRaceTarget,
 } from "@/lib/coach/context";
+import { persistQueryLearningEvent } from "@/lib/coach/learning";
 import { featureFlags } from "@/lib/feature-flags";
 import { createClient } from "@/lib/supabase/server";
 import { buildWellnessSnapshot } from "@/lib/wellness/context";
@@ -168,6 +169,7 @@ export async function POST(request: NextRequest) {
       queryRoute: "internal",
       scenarioPlan: null,
       unresolvedQuestions: [],
+      learning: null,
     });
   };
 
@@ -328,6 +330,23 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Coach response unavailable" }, { status: 500 });
     }
     const assistantContent = normalizeContent(resolvedCoach.assistantMessage);
+    const assistantMetadata = {
+      riskFlags: resolvedCoach.riskFlags,
+      suggestedActions: resolvedCoach.suggestedActions,
+      followUpQuestions: resolvedCoach.followUpQuestions,
+      usage: resolvedCoach.usage ?? null,
+      intent: coachV2?.intent ?? null,
+      responseMode: coachV2?.responseMode ?? "llm",
+      coachState: coachV2?.coachState ?? null,
+      activeBlock: coachV2?.activeBlock ?? null,
+      stateChanges: coachV2?.stateChanges ?? [],
+      evidenceItems: coachV2?.evidenceItems ?? [],
+      assumptionsUsed: coachV2?.assumptionsUsed ?? [],
+      memoryApplied: coachV2?.memoryApplied ?? [],
+      queryRoute: coachV2?.queryRoute ?? "internal",
+      scenarioPlan: coachV2?.scenarioPlan ?? null,
+      unresolvedQuestions: coachV2?.unresolvedQuestions ?? [],
+    };
 
     const { data: assistantRow } = await supabase
       .from("coach_messages")
@@ -338,23 +357,7 @@ export async function POST(request: NextRequest) {
         content: assistantContent,
         confidence: resolvedCoach.confidence,
         citations: resolvedCoach.citations,
-        metadata: {
-          riskFlags: resolvedCoach.riskFlags,
-          suggestedActions: resolvedCoach.suggestedActions,
-          followUpQuestions: resolvedCoach.followUpQuestions,
-          usage: resolvedCoach.usage ?? null,
-          intent: coachV2?.intent ?? null,
-          responseMode: coachV2?.responseMode ?? "llm",
-          coachState: coachV2?.coachState ?? null,
-          activeBlock: coachV2?.activeBlock ?? null,
-          stateChanges: coachV2?.stateChanges ?? [],
-          evidenceItems: coachV2?.evidenceItems ?? [],
-          assumptionsUsed: coachV2?.assumptionsUsed ?? [],
-          memoryApplied: coachV2?.memoryApplied ?? [],
-          queryRoute: coachV2?.queryRoute ?? "internal",
-          scenarioPlan: coachV2?.scenarioPlan ?? null,
-          unresolvedQuestions: coachV2?.unresolvedQuestions ?? [],
-        },
+        metadata: assistantMetadata,
       })
       .select("id,created_at")
       .single();
@@ -369,6 +372,11 @@ export async function POST(request: NextRequest) {
       .eq("user_id", user.id);
 
     const assistantMessageId = assistantRow?.id ? String(assistantRow.id) : null;
+    const userMessageId = userMessageRow?.id ? String(userMessageRow.id) : null;
+    const nextConstraintSignals = extractConstraintSignals(message);
+    const nextActiveConstraints = Array.from(
+      new Set([...(conversationState.activeConstraints ?? []), ...nextConstraintSignals]),
+    ).slice(0, 12);
 
     const updateTasks: Array<Promise<unknown>> = [
       ...(featureFlags.coachMemoryV1
@@ -429,9 +437,7 @@ export async function POST(request: NextRequest) {
               raceDate: objective?.goalRaceDate ?? "2026-04-20",
               targetFinishSeconds: objective?.targetFinishSeconds ?? null,
             },
-            activeConstraints: Array.from(
-              new Set([...conversationState.activeConstraints, ...extractConstraintSignals(message)]),
-            ).slice(0, 12),
+            activeConstraints: nextActiveConstraints,
             unresolvedQuestions:
               coachV2.unresolvedQuestions.length > 0
                 ? coachV2.unresolvedQuestions
@@ -439,7 +445,7 @@ export async function POST(request: NextRequest) {
             entityMemory: {
               ...conversationState.entityMemory,
               lastTopic: message.slice(0, 180),
-              lastConstraint: extractConstraintSignals(message)[0] ?? null,
+              lastConstraint: nextConstraintSignals[0] ?? null,
               lastAssistantMode: coachV2.responseMode,
             },
             currentBlockPhase:
@@ -469,6 +475,44 @@ export async function POST(request: NextRequest) {
     }
 
     await Promise.all(updateTasks);
+    let learning = null as Awaited<ReturnType<typeof persistQueryLearningEvent>> | null;
+    if (featureFlags.coachWorkbenchV1) {
+      try {
+        learning = await persistQueryLearningEvent({
+          supabase,
+          input: {
+            userId: user.id,
+            threadId: thread.id,
+            userMessageId,
+            assistantMessageId,
+            queryText: message,
+            assistantText: assistantContent,
+            intent: coachV2?.intent ?? "other",
+            queryRoute: coachV2?.queryRoute ?? "internal",
+            confidence: Number(resolvedCoach.confidence ?? 0.6),
+            riskFlags: resolvedCoach.riskFlags ?? [],
+            stateChanges: coachV2?.stateChanges ?? [],
+            unresolvedQuestions:
+              coachV2?.unresolvedQuestions.length
+                ? coachV2.unresolvedQuestions
+                : resolvedCoach.followUpQuestions.slice(0, 2),
+            assumptionsUsed: coachV2?.assumptionsUsed ?? [],
+            memoryApplied: coachV2?.memoryApplied ?? [],
+            activeConstraints: nextActiveConstraints,
+            raceDate: objective?.goalRaceDate ?? coachV2?.activeBlock?.raceDate ?? null,
+          },
+        });
+      } catch {
+        learning = null;
+      }
+    }
+    if (learning && assistantMessageId) {
+      await supabase
+        .from("coach_messages")
+        .update({ metadata: { ...assistantMetadata, learning } })
+        .eq("id", assistantMessageId)
+        .eq("user_id", user.id);
+    }
 
     return NextResponse.json({
       threadId: thread.id,
@@ -480,7 +524,7 @@ export async function POST(request: NextRequest) {
       followUpQuestions: resolvedCoach.followUpQuestions,
       usage: resolvedCoach.usage ?? null,
       generatedAt: new Date().toISOString(),
-      userMessageId: userMessageRow?.id ?? null,
+      userMessageId,
       assistantMessageId,
       intent: coachV2?.intent ?? null,
       responseMode: coachV2?.responseMode ?? "llm",
@@ -493,6 +537,7 @@ export async function POST(request: NextRequest) {
       queryRoute: coachV2?.queryRoute ?? "internal",
       scenarioPlan: coachV2?.scenarioPlan ?? null,
       unresolvedQuestions: coachV2?.unresolvedQuestions ?? [],
+      learning,
     });
   } catch (error) {
     const mapped = tableMissingMessage(error);

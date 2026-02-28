@@ -11,6 +11,7 @@ const desktopTabs = [
   { href: "/dashboard", label: "Today" },
   { href: "/coach", label: "Coach" },
   { href: "/trends", label: "Trends" },
+  { href: "/analysis", label: "Analysis" },
   { href: "/plan", label: "Plan" },
   { href: "/wellness", label: "Wellness" },
   { href: "/profile", label: "Profile" },

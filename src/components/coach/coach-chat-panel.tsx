@@ -1,185 +1,43 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
-import { CircleAlert, Loader2, Plus, Send } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { AlertTriangle, Loader2, Plus, Send } from "lucide-react";
+import { CoachAvatar } from "@/components/coach/coach-avatar";
+import {
+  ChatMessage,
+  ContextPayload,
+  ThreadPayload,
+  badgeToneForState,
+  confidenceLabel,
+  daysUntilRace,
+  formatDateSeparator,
+  getCalendarDay,
+  getContextualPrompts,
+  humanStateLabel,
+  normalizeContent,
+  normalizeMessages,
+  normalizeMetadata,
+  resolveActionTarget,
+  riskBannerProps,
+} from "@/components/coach/coach-chat-helpers";
 
-type CoachState = {
-  availabilityState: "normal" | "injury_adaptation" | "medical_hold" | "return_build";
-  runningAllowed: boolean;
-  expectedReturnDate: string | null;
-  confidence: number;
-  source: string;
-  updatedAt: string | null;
-};
-
-type ActiveBlock = {
-  raceName: string;
-  raceDate: string;
-  weekIndex: number | null;
-  comparator: {
-    weeklyDeltaKm: number | null;
-    confidence: "low" | "moderate" | "high";
-  };
-};
-
-type EvidenceItem = {
-  id: string;
+type WorkbenchModule = {
+  moduleKey: string;
   title: string;
-  url: string;
-  domain: string;
-  claim: string;
-  confidence: number;
-  publishedAt: string | null;
+  description: string;
+  score: number;
+  reason: string;
+  pinned: boolean;
+  visibility: "auto" | "manual_shown" | "manual_hidden";
+  slotIndex: number;
+  autoShown: boolean;
 };
 
-type ScenarioPlan = {
-  items: Array<{
-    outageDays: number;
-    missedSessions: number;
-    missedKm: number;
-    riskLevel: "low" | "moderate" | "high";
-    planImpact: string;
-    returnFocus: string;
-  }>;
-};
-
-type ChatMetadata = {
-  suggestedActions: string[];
-  followUpQuestions: string[];
-  riskFlags: string[];
-  intent?: string | null;
-  responseMode?: string | null;
-  coachState?: CoachState | null;
-  activeBlock?: ActiveBlock | null;
-  stateChanges?: string[];
-  evidenceItems?: EvidenceItem[];
-  assumptionsUsed?: string[];
-  memoryApplied?: string[];
-  queryRoute?: string | null;
-  scenarioPlan?: ScenarioPlan | null;
-  unresolvedQuestions?: string[];
-};
-
-type ChatMessage = {
-  id: string;
-  role: "user" | "assistant" | "system";
-  content: string;
-  created_at?: string;
-  confidence?: number | null;
-  metadata?: ChatMetadata | null;
-};
-
-type ThreadPayload = {
-  thread: { id: string } | null;
-  messages: Array<Partial<ChatMessage> & { id?: unknown; role?: unknown; content?: unknown }>;
-  coachUnavailable?: boolean;
-  warning?: unknown;
-};
-
-type ContextPayload = {
-  objective?: { goalRaceName?: string; goalRaceDate?: string | null } | null;
-  coachState?: CoachState | null;
-  activeBlock?: ActiveBlock | null;
-  generatedAt?: string;
-};
-
-const CACHE_KEY = "graafin_coach_thread_cache_v2";
-
-const quickPrompts = [
-  "Am I on track for Boston from where I am right now?",
-  "Compare this week to my best historical marathon blocks.",
-  "What is the single highest-value adjustment for this week?",
-  "Use curated best practices and my own data to refine my plan.",
-];
-
-function normalizeContent(value: unknown): string {
-  if (typeof value === "string") return value;
-  if (typeof value === "number" || typeof value === "boolean") return String(value);
-  if (Array.isArray(value)) return value.map((item) => normalizeContent(item)).filter(Boolean).join("\n");
-  if (value && typeof value === "object") {
-    const record = value as Record<string, unknown>;
-    for (const key of ["text", "content", "message", "recommendation", "rationale"]) {
-      const candidate = normalizeContent(record[key]);
-      if (candidate) return candidate;
-    }
-    try {
-      return JSON.stringify(value);
-    } catch {
-      return String(value);
-    }
-  }
-  return "";
-}
-
-function normalizeRole(value: unknown): ChatMessage["role"] {
-  return value === "assistant" || value === "system" ? value : "user";
-}
-
-function normalizeStringArray(value: unknown): string[] {
-  if (!Array.isArray(value)) return [];
-  return value.map((item) => normalizeContent(item).trim()).filter(Boolean);
-}
-
-function normalizeEvidence(value: unknown): EvidenceItem[] {
-  if (!Array.isArray(value)) return [];
-  return value
-    .map((item) => {
-      const row = item as Record<string, unknown>;
-      return {
-        id: normalizeContent(row.id),
-        title: normalizeContent(row.title),
-        url: normalizeContent(row.url),
-        domain: normalizeContent(row.domain),
-        claim: normalizeContent(row.claim),
-        confidence: typeof row.confidence === "number" ? row.confidence : Number(row.confidence ?? 0.7),
-        publishedAt: row.publishedAt == null ? null : normalizeContent(row.publishedAt),
-      };
-    })
-    .filter((item) => item.title.length > 0);
-}
-
-function normalizeMetadata(value: unknown): ChatMetadata {
-  const metadataRaw = (value ?? {}) as Record<string, unknown>;
-  return {
-    suggestedActions: normalizeStringArray(metadataRaw.suggestedActions),
-    followUpQuestions: normalizeStringArray(metadataRaw.followUpQuestions),
-    riskFlags: normalizeStringArray(metadataRaw.riskFlags),
-    intent: metadataRaw.intent == null ? null : normalizeContent(metadataRaw.intent),
-    responseMode: metadataRaw.responseMode == null ? null : normalizeContent(metadataRaw.responseMode),
-    coachState: (metadataRaw.coachState as CoachState | null | undefined) ?? null,
-    activeBlock: (metadataRaw.activeBlock as ActiveBlock | null | undefined) ?? null,
-    stateChanges: normalizeStringArray(metadataRaw.stateChanges),
-    evidenceItems: normalizeEvidence(metadataRaw.evidenceItems),
-    assumptionsUsed: normalizeStringArray(metadataRaw.assumptionsUsed),
-    memoryApplied: normalizeStringArray(metadataRaw.memoryApplied),
-    queryRoute: metadataRaw.queryRoute == null ? null : normalizeContent(metadataRaw.queryRoute),
-    scenarioPlan: (metadataRaw.scenarioPlan as ScenarioPlan | null | undefined) ?? null,
-    unresolvedQuestions: normalizeStringArray(metadataRaw.unresolvedQuestions),
-  };
-}
-
-function normalizeMessages(rawMessages: ThreadPayload["messages"]): ChatMessage[] {
-  return (rawMessages ?? []).map((raw, index) => {
-    return {
-      id: typeof raw.id === "string" ? raw.id : `msg-${Date.now()}-${index}`,
-      role: normalizeRole(raw.role),
-      content: normalizeContent(raw.content),
-      created_at: typeof raw.created_at === "string" ? raw.created_at : undefined,
-      confidence: typeof raw.confidence === "number" ? raw.confidence : null,
-      metadata: normalizeMetadata(raw.metadata),
-    };
-  });
-}
-
-function badgeToneForState(state: CoachState | null): string {
-  if (!state) return "bg-slate-100 text-slate-700";
-  if (!state.runningAllowed || state.availabilityState === "medical_hold") return "bg-rose-100 text-rose-700";
-  if (state.availabilityState === "injury_adaptation") return "bg-amber-100 text-amber-700";
-  if (state.availabilityState === "return_build") return "bg-sky-100 text-sky-700";
-  return "bg-emerald-100 text-emerald-700";
-}
+const CACHE_KEY = "graafin_coach_thread_cache_v3";
 
 export function CoachChatPanel() {
+  const router = useRouter();
   const [threadId, setThreadId] = useState<string | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
@@ -188,8 +46,20 @@ export function CoachChatPanel() {
   const [stateUpdating, setStateUpdating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [context, setContext] = useState<ContextPayload | null>(null);
+  const [coachModules, setCoachModules] = useState<WorkbenchModule[]>([]);
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const composerRef = useRef<HTMLTextAreaElement | null>(null);
+
+  const loadWorkbench = async () => {
+    try {
+      const res = await fetch("/api/coach/workbench?surface=coach", { method: "GET" });
+      if (!res.ok) return;
+      const data = (await res.json()) as { modules?: WorkbenchModule[] };
+      if (Array.isArray(data.modules)) setCoachModules(data.modules);
+    } catch {
+      // Ignore optional workbench loading failures.
+    }
+  };
 
   useEffect(() => {
     const load = async () => {
@@ -214,6 +84,7 @@ export function CoachChatPanel() {
         }
 
         localStorage.setItem(CACHE_KEY, JSON.stringify({ thread: threadData.thread, messages: normalized }));
+        await loadWorkbench();
       } catch (e) {
         const cached = localStorage.getItem(CACHE_KEY);
         if (cached) {
@@ -243,6 +114,8 @@ export function CoachChatPanel() {
     [messages],
   );
 
+  const latestLearningEventId = latestAssistant?.metadata?.learning?.eventId ?? null;
+
   useEffect(() => {
     if (!latestAssistant?.metadata) return;
     setContext((prev) => ({
@@ -250,7 +123,28 @@ export function CoachChatPanel() {
       coachState: latestAssistant.metadata?.coachState ?? prev?.coachState ?? null,
       activeBlock: latestAssistant.metadata?.activeBlock ?? prev?.activeBlock ?? null,
     }));
+
+    const learningModules = latestAssistant.metadata.learning?.modules;
+    if (Array.isArray(learningModules) && learningModules.length > 0) {
+      setCoachModules(learningModules as unknown as WorkbenchModule[]);
+    }
   }, [latestAssistant]);
+
+  const sendFeedback = async (feedbackType: "thumb_up" | "thumb_down" | "module_open" | "module_hide", payload: Record<string, unknown>) => {
+    try {
+      await fetch("/api/coach/feedback", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          eventId: latestLearningEventId,
+          feedbackType,
+          payload,
+        }),
+      });
+    } catch {
+      // No-op by design.
+    }
+  };
 
   const send = async (message: string) => {
     const trimmed = message.trim();
@@ -293,6 +187,7 @@ export function CoachChatPanel() {
         queryRoute: data.queryRoute,
         scenarioPlan: data.scenarioPlan,
         unresolvedQuestions: data.unresolvedQuestions,
+        learning: data.learning,
       });
 
       const assistant: ChatMessage = {
@@ -300,6 +195,7 @@ export function CoachChatPanel() {
         role: "assistant",
         content: normalizeContent(data.assistantMessage),
         confidence: typeof data.confidence === "number" ? data.confidence : null,
+        created_at: typeof data.generatedAt === "string" ? data.generatedAt : new Date().toISOString(),
         metadata,
       };
 
@@ -307,7 +203,12 @@ export function CoachChatPanel() {
         const nextThreadId = typeof data.threadId === "string" && data.threadId.length > 0 ? data.threadId : threadId;
         const nextMessages: ChatMessage[] = [
           ...prev.filter((m) => m.id !== tempId),
-          { id: String(data.userMessageId ?? tempId), role: "user", content: trimmed },
+          {
+            id: String(data.userMessageId ?? tempId),
+            role: "user",
+            content: trimmed,
+            created_at: typeof data.generatedAt === "string" ? data.generatedAt : new Date().toISOString(),
+          },
           assistant,
         ];
         localStorage.setItem(
@@ -316,14 +217,23 @@ export function CoachChatPanel() {
         );
         return nextMessages;
       });
+
       setContext((prev) => ({
         ...prev,
         coachState: metadata.coachState ?? prev?.coachState ?? null,
         activeBlock: metadata.activeBlock ?? prev?.activeBlock ?? null,
       }));
+
+      if (data.learning?.modules && Array.isArray(data.learning.modules)) {
+        setCoachModules(data.learning.modules as WorkbenchModule[]);
+      } else {
+        await loadWorkbench();
+      }
+
       if (typeof data.warning === "string" && data.warning.trim().length > 0) {
         setError(data.warning.trim());
       }
+
       setThreadId(typeof data.threadId === "string" && data.threadId.length > 0 ? data.threadId : threadId);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to send message");
@@ -363,6 +273,7 @@ export function CoachChatPanel() {
           id: `sys-${Date.now()}`,
           role: "system",
           content: `Context updated: ${payload.note}.`,
+          created_at: new Date().toISOString(),
         },
       ]);
     } catch (e) {
@@ -382,6 +293,10 @@ export function CoachChatPanel() {
   };
 
   const startNewChat = () => {
+    if (messages.length > 0) {
+      const confirmed = window.confirm("Start fresh? Your coach keeps your training history and memory.");
+      if (!confirmed) return;
+    }
     setThreadId(null);
     setMessages([]);
     setInput("");
@@ -393,13 +308,21 @@ export function CoachChatPanel() {
   const followups = latestAssistant?.metadata?.followUpQuestions ?? [];
   const unresolved = latestAssistant?.metadata?.unresolvedQuestions ?? [];
   const evidenceItems = latestAssistant?.metadata?.evidenceItems ?? [];
+  const raceCountdown = daysUntilRace(context?.objective?.goalRaceDate ?? context?.activeBlock?.raceDate ?? null);
+  const readableState = humanStateLabel(context?.coachState ?? null);
+  const riskModule = coachModules.find((module) => module.moduleKey === "risk_banner" && module.autoShown);
+  const riskBanner = riskBannerProps(latestAssistant?.metadata?.riskFlags ?? []);
+
   return (
     <div className="flex h-[calc(100dvh-12.5rem)] min-h-[520px] flex-col overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm lg:h-[calc(100dvh-10.5rem)]">
       <header className="border-b border-slate-200 px-4 py-3">
         <div className="flex items-center justify-between">
-          <div>
-            <p className="text-sm font-semibold text-slate-900">GPT Coach</p>
-            <p className="text-xs text-slate-500">Evidence-based calm · suggest-only</p>
+          <div className="flex items-center gap-2.5">
+            <CoachAvatar size="md" />
+            <div>
+              <p className="text-sm font-semibold text-slate-900">Coach</p>
+              <p className="text-xs text-slate-500">Grounded in your data</p>
+            </div>
           </div>
           <button
             type="button"
@@ -410,22 +333,25 @@ export function CoachChatPanel() {
             New chat
           </button>
         </div>
+
         <div className="mt-3 flex flex-wrap gap-2">
           <span className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-[11px] text-slate-700">
-            Race: {context?.objective?.goalRaceName ?? "Boston Marathon"} · {context?.objective?.goalRaceDate ?? "2026-04-20"}
+            Race: {context?.objective?.goalRaceName ?? "Boston Marathon"}
+            {raceCountdown != null ? ` · ${raceCountdown} days` : ""}
           </span>
-          <span className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-[11px] text-slate-700">
-            Block week: {context?.activeBlock?.weekIndex ?? "n/a"}
-          </span>
-          <span className={`rounded-full px-2.5 py-1 text-[11px] ${badgeToneForState(context?.coachState ?? null)}`}>
-            State: {context?.coachState?.availabilityState ?? "normal"} · run {context?.coachState?.runningAllowed ? "allowed" : "paused"}
-          </span>
-          {latestAssistant?.metadata?.responseMode ? (
+          {context?.activeBlock?.weekIndex != null ? (
             <span className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-[11px] text-slate-700">
-              Mode: {latestAssistant.metadata.responseMode}
+              Week {context.activeBlock.weekIndex} of {context.activeBlock.weekCount ?? 12}
             </span>
           ) : null}
+          <span className={`rounded-full px-2.5 py-1 text-[11px] ${readableState.tone}`}>
+            {readableState.label}
+          </span>
+          <span className={`rounded-full px-2.5 py-1 text-[11px] ${badgeToneForState(context?.coachState ?? null)}`}>
+            Run {context?.coachState?.runningAllowed ? "allowed" : "paused"}
+          </span>
         </div>
+
         <div className="mt-2 flex flex-wrap gap-2">
           <button
             type="button"
@@ -472,6 +398,16 @@ export function CoachChatPanel() {
         </div>
       </header>
 
+      {riskBanner ? (
+        <div className={`mx-3 mt-2 rounded-xl border px-3 py-2 text-xs ${riskBanner.tone}`}>
+          <p className="inline-flex items-center gap-1 font-medium">
+            <AlertTriangle className="h-3.5 w-3.5" />
+            {riskBanner.text}
+          </p>
+          {riskModule?.reason ? <p className="mt-1 text-[11px] opacity-80">Why shown: {riskModule.reason}</p> : null}
+        </div>
+      ) : null}
+
       <div ref={scrollRef} className="flex-1 overflow-y-auto px-3 py-4 sm:px-4">
         <div className="mx-auto w-full max-w-3xl space-y-4">
           {error ? (
@@ -492,7 +428,7 @@ export function CoachChatPanel() {
                 Ask naturally. Coach keeps context across topics, block comparisons, and state updates.
               </p>
               <div className="mx-auto mt-6 grid max-w-2xl gap-2 sm:grid-cols-2">
-                {quickPrompts.map((prompt) => (
+                {getContextualPrompts(context).map((prompt) => (
                   <button
                     key={prompt}
                     type="button"
@@ -510,59 +446,135 @@ export function CoachChatPanel() {
           ) : null}
 
           {!booting &&
-            messages.map((message) => (
-              <article key={message.id} className={`flex ${message.role === "user" ? "justify-end" : "justify-start"}`}>
-                <div
-                  className={
-                    message.role === "user"
-                      ? "max-w-[86%] rounded-3xl bg-slate-900 px-4 py-3 text-sm text-white"
-                      : message.role === "system"
-                        ? "max-w-[92%] rounded-3xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700"
-                        : "max-w-[92%] rounded-3xl bg-slate-100 px-4 py-3 text-sm text-slate-800"
-                  }
-                >
-                  {message.role === "assistant" ? (
-                    <p className="mb-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500">Coach</p>
-                  ) : null}
-                  {message.role === "system" ? (
-                    <p className="mb-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-400">Context</p>
-                  ) : null}
-                  <p className="whitespace-pre-wrap leading-relaxed">{message.content}</p>
-                  {message.role === "assistant" && message.metadata?.riskFlags?.length ? (
-                    <p className="mt-2 inline-flex items-center gap-1 text-xs text-amber-700">
-                      <CircleAlert className="h-3.5 w-3.5" />
-                      Risk flags: {message.metadata.riskFlags.join(", ")}
-                    </p>
-                  ) : null}
-                  {message.role === "assistant" && message.metadata?.stateChanges?.length ? (
-                    <p className="mt-2 text-xs text-slate-500">State changes: {message.metadata.stateChanges.join(" · ")}</p>
-                  ) : null}
-                  {message.role === "assistant" && message.metadata?.scenarioPlan?.items?.length ? (
-                    <div className="mt-3 space-y-1 rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs text-slate-700">
-                      <p className="font-semibold text-slate-800">Outage scenarios</p>
-                      {message.metadata.scenarioPlan.items.map((item) => (
-                        <p key={`scenario-${item.outageDays}`}>
-                          {item.outageDays}d: ~{item.missedKm.toFixed(1)} km missed, {item.missedSessions} sessions, {item.riskLevel} risk.
-                        </p>
-                      ))}
+            messages.map((message, index) => {
+              const previous = index > 0 ? messages[index - 1] : null;
+              const showDateSeparator = getCalendarDay(message.created_at) !== getCalendarDay(previous?.created_at);
+              const showTopicShift =
+                message.role === "assistant" &&
+                previous?.role === "assistant" &&
+                message.metadata?.intent &&
+                previous.metadata?.intent &&
+                message.metadata.intent !== previous.metadata.intent;
+              const moduleReason = message.metadata?.learning?.modules?.[0]?.reason;
+              const confidence = confidenceLabel(message.confidence ?? null);
+
+              return (
+                <div key={message.id} className="space-y-2">
+                  {showDateSeparator ? (
+                    <div className="flex items-center gap-2 py-1">
+                      <span className="h-px flex-1 bg-slate-200" />
+                      <span className="text-[11px] text-slate-400">{formatDateSeparator(message.created_at)}</span>
+                      <span className="h-px flex-1 bg-slate-200" />
                     </div>
                   ) : null}
-                  {message.role === "assistant" && message.metadata?.suggestedActions?.length ? (
-                    <div className="mt-2 flex flex-wrap gap-1.5">
-                      {message.metadata.suggestedActions.map((action) => (
-                        <span key={action} className="rounded-full border border-slate-300 px-2 py-1 text-xs text-slate-600">
-                          {action}
-                        </span>
-                      ))}
-                    </div>
+
+                  {showTopicShift ? (
+                    <p className="text-center text-[11px] uppercase tracking-[0.12em] text-slate-400">Topic shift</p>
                   ) : null}
+
+                  <article className={`flex ${message.role === "user" ? "justify-end" : "justify-start"}`}>
+                    {message.role === "assistant" ? (
+                      <div className="flex max-w-[96%] items-start gap-2">
+                        <CoachAvatar size="sm" />
+                        <div className="max-w-[92%] rounded-3xl bg-slate-100 px-4 py-3 text-sm text-slate-800">
+                          <p className="mb-1 text-[11px] font-semibold text-slate-500">
+                            Coach
+                            {confidence ? (
+                              <span className={`ml-1 font-medium ${confidence.tone}`}>
+                                · {confidence.text}
+                              </span>
+                            ) : null}
+                          </p>
+                          <p className="whitespace-pre-wrap leading-relaxed">{message.content}</p>
+
+                          {message.metadata?.stateChanges?.length ? (
+                            <p className="mt-2 text-xs text-slate-500">State changes: {message.metadata.stateChanges.join(" · ")}</p>
+                          ) : null}
+
+                          {message.metadata?.assumptionsUsed?.length ? (
+                            <details className="mt-2 rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs text-slate-700">
+                              <summary className="cursor-pointer font-medium text-slate-800">
+                                Coach is assuming ({message.metadata.assumptionsUsed.length})
+                              </summary>
+                              <ul className="mt-1 space-y-1">
+                                {message.metadata.assumptionsUsed.map((item) => (
+                                  <li key={item}>- {item}</li>
+                                ))}
+                              </ul>
+                            </details>
+                          ) : null}
+
+                          {message.metadata?.memoryApplied?.length ? (
+                            <p className="mt-2 text-xs italic text-slate-500">
+                              Using your preferences: {message.metadata.memoryApplied.join(", ")}
+                            </p>
+                          ) : null}
+
+                          {message.metadata?.scenarioPlan?.items?.length ? (
+                            <div className="mt-3 space-y-1 rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs text-slate-700">
+                              <p className="font-semibold text-slate-800">Outage scenarios</p>
+                              {message.metadata.scenarioPlan.items.map((item) => (
+                                <p key={`scenario-${item.outageDays}`}>
+                                  {item.outageDays}d: ~{item.missedKm.toFixed(1)} km missed, {item.missedSessions} sessions, {item.riskLevel} risk.
+                                </p>
+                              ))}
+                            </div>
+                          ) : null}
+
+                          {message.metadata?.suggestedActions?.length ? (
+                            <div className="mt-2 flex flex-wrap gap-1.5">
+                              {message.metadata.suggestedActions.map((action) => (
+                                <button
+                                  key={action}
+                                  type="button"
+                                  onClick={() => {
+                                    const target = resolveActionTarget(action);
+                                    if (target.type === "navigate") {
+                                      router.push(target.href);
+                                    } else {
+                                      setInput(target.text);
+                                      composerRef.current?.focus();
+                                    }
+                                    void sendFeedback("module_open", {
+                                      moduleKey: "action_rail",
+                                      action,
+                                      targetType: target.type,
+                                    });
+                                  }}
+                                  className="rounded-full border border-slate-300 px-2 py-1 text-xs text-slate-600 hover:bg-slate-200"
+                                >
+                                  {action}
+                                </button>
+                              ))}
+                            </div>
+                          ) : null}
+
+                          {moduleReason ? <p className="mt-2 text-[11px] text-slate-400">Why shown: {moduleReason}</p> : null}
+                        </div>
+                      </div>
+                    ) : (
+                      <div
+                        className={
+                          message.role === "user"
+                            ? "max-w-[86%] rounded-3xl bg-slate-900 px-4 py-3 text-sm text-white"
+                            : "max-w-[92%] rounded-3xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700"
+                        }
+                      >
+                        {message.role === "system" ? (
+                          <p className="mb-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-400">Context</p>
+                        ) : null}
+                        <p className="whitespace-pre-wrap leading-relaxed">{message.content}</p>
+                      </div>
+                    )}
+                  </article>
                 </div>
-              </article>
-            ))}
+              );
+            })}
 
           {loading ? (
             <div className="flex justify-start">
               <div className="inline-flex items-center gap-2 rounded-2xl bg-slate-100 px-3 py-2 text-sm text-slate-600">
+                <CoachAvatar size="sm" />
                 <Loader2 className="h-4 w-4 animate-spin" />
                 Coach is thinking...
               </div>
@@ -573,7 +585,7 @@ export function CoachChatPanel() {
 
       <footer className="border-t border-slate-200 bg-white/95 px-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-3 sm:px-4">
         <div className="mx-auto w-full max-w-3xl space-y-2">
-          {(followups.length > 0 || unresolved.length > 0) ? (
+          {followups.length > 0 || unresolved.length > 0 ? (
             <div className="flex gap-2 overflow-x-auto pb-1">
               {[...unresolved, ...followups].slice(0, 4).map((question) => (
                 <button
