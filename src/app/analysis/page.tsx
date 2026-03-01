@@ -1,13 +1,15 @@
 import { redirect } from "next/navigation";
 import { AppShell } from "@/components/app-shell";
-import { AnalysisDashboard } from "@/components/analysis/analysis-dashboard";
+import { PerformanceDashboard } from "@/components/analysis/performance-dashboard";
 import { createClient } from "@/lib/supabase/server";
 import { getPrimaryAthleteId } from "@/lib/athlete";
 import {
   aggregateDailyFacts,
+  computeTrainingLoad,
   type ActivitySample,
 } from "@/lib/metrics/load";
 import type { DailyMetricRow, SleepRow } from "@/lib/analysis/transforms";
+import type { PerformanceActivity } from "@/lib/analysis/performance-transforms";
 
 function mapMetric(row: Record<string, unknown>): DailyMetricRow {
   return {
@@ -47,7 +49,7 @@ function mapSleep(row: Record<string, unknown>): SleepRow {
   };
 }
 
-function mapActivity(row: Record<string, unknown>): ActivitySample {
+function mapPerformanceActivity(row: Record<string, unknown>): PerformanceActivity {
   return {
     id: String(row.id ?? ""),
     name: String(row.name ?? ""),
@@ -55,7 +57,13 @@ function mapActivity(row: Record<string, unknown>): ActivitySample {
     startDate: String(row.start_date ?? new Date().toISOString()),
     distanceM: Number(row.distance_m ?? 0),
     movingTimeS: Number(row.moving_time_s ?? 0),
+    averageSpeed: Number(row.average_speed ?? 0),
     averageHeartrate: row.average_heartrate != null ? Number(row.average_heartrate) : null,
+    maxHeartrate: row.max_heartrate != null ? Number(row.max_heartrate) : null,
+    sufferScore: row.suffer_score != null ? Number(row.suffer_score) : null,
+    totalElevation: row.total_elevation != null ? Number(row.total_elevation) : null,
+    elapsedTimeS: row.elapsed_time_s != null ? Number(row.elapsed_time_s) : null,
+    prCount: row.pr_count != null ? Number(row.pr_count) : null,
   };
 }
 
@@ -88,7 +96,7 @@ export default async function AnalysisPage() {
       .limit(2000),
     supabase
       .from("strava_activities")
-      .select("id,name,type,start_date,distance_m,moving_time_s,average_heartrate")
+      .select("id,name,type,start_date,distance_m,moving_time_s,average_speed,average_heartrate,max_heartrate,suffer_score,total_elevation,elapsed_time_s,pr_count")
       .eq("athlete_id", athleteId)
       .order("start_date", { ascending: true })
       .limit(5000),
@@ -100,26 +108,46 @@ export default async function AnalysisPage() {
   const sleep = (sleepResult.data ?? []).map((row) =>
     mapSleep(row as Record<string, unknown>),
   );
-  const activities = (activitiesResult.data ?? []).map((row) =>
-    mapActivity(row as Record<string, unknown>),
+  const perfActivities = (activitiesResult.data ?? []).map((row) =>
+    mapPerformanceActivity(row as Record<string, unknown>),
   );
 
-  const dailyFacts = aggregateDailyFacts(activities);
-  const loadFacts = dailyFacts.map((f) => ({ date: f.date, loadScore: f.loadScore }));
+  // Compute training load series (needs basic ActivitySample)
+  const activitySamples: ActivitySample[] = perfActivities.map((a) => ({
+    id: a.id,
+    name: a.name,
+    type: a.type,
+    startDate: a.startDate,
+    distanceM: a.distanceM,
+    movingTimeS: a.movingTimeS,
+    averageHeartrate: a.averageHeartrate,
+  }));
+  const dailyFacts = aggregateDailyFacts(activitySamples);
+  const loadSeries = computeTrainingLoad(dailyFacts);
+
+  const runCount = perfActivities.filter((a) => a.type.toLowerCase() === "run").length;
 
   return (
     <AppShell>
       <div>
         <h1 className="text-2xl font-semibold text-slate-900">
-          Wellness Intelligence
+          Performance Intelligence
         </h1>
         <p className="mt-1 text-sm text-slate-600">
-          Longitudinal patterns across {metrics.length.toLocaleString()} days of
-          wellness data.
+          Training load, pace, and performance analysis across{" "}
+          {runCount.toLocaleString()} runs and{" "}
+          {metrics.length.toLocaleString()} days of wellness data.
         </p>
       </div>
 
-      <AnalysisDashboard metrics={metrics} sleep={sleep} loadFacts={loadFacts} athleteId={athleteId} />
+      <PerformanceDashboard
+        activities={perfActivities}
+        metrics={metrics}
+        sleep={sleep}
+        dailyFacts={dailyFacts}
+        loadSeries={loadSeries}
+        athleteId={athleteId}
+      />
     </AppShell>
   );
 }

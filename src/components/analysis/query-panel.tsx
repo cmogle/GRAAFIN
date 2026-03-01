@@ -21,12 +21,12 @@ type Message = {
 };
 
 const STARTER_QUESTIONS = [
-  "What's my average resting heart rate by month over the last 4 years?",
-  "How does my sleep duration correlate with next-day body battery?",
-  "What are my worst and best months for HRV?",
-  "How has my VO2 max changed over time?",
-  "When do I tend to have the highest stress levels?",
-  "What's my typical recovery pattern after a week with 50+ km of running?",
+  "What's my average pace by month for runs between 10-15km?",
+  "How does my weekly running volume correlate with average pace the following week?",
+  "What were my fastest 10 runs by pace, and what was my resting HR the day before each?",
+  "Compare my marathon race paces over time — am I getting faster?",
+  "How does sleep duration in the 3 days before a run affect my pace?",
+  "What's my typical weekly km and long run count in the 8 weeks before a marathon?",
 ];
 
 export function QueryPanel({ athleteId }: { athleteId: number }) {
@@ -116,7 +116,7 @@ export function QueryPanel({ athleteId }: { athleteId: number }) {
           {messages.length === 0 ? (
             <div className="py-4">
               <p className="mb-3 text-sm text-slate-500">
-                Ask questions about your wellness data in plain English.
+                Ask questions about your training and performance data in plain English.
               </p>
               <div className="flex flex-wrap gap-2">
                 {STARTER_QUESTIONS.map((q) => (
@@ -206,7 +206,7 @@ export function QueryPanel({ athleteId }: { athleteId: number }) {
               type="text"
               value={input}
               onChange={(e) => setInput(e.target.value)}
-              placeholder="Ask about your wellness data..."
+              placeholder="Ask about your training and performance data..."
               disabled={loading}
               className="flex-1 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm text-slate-700 placeholder:text-slate-400 focus:border-slate-400 focus:outline-none disabled:opacity-60"
             />
