@@ -2,14 +2,13 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Activity, Bot, ChartLine, User, CalendarCheck2, HeartPulse } from "lucide-react";
+import { Activity, Bot, ChartBarBig, User, HeartPulse } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const tabs = [
   { href: "/dashboard", label: "Today", icon: Activity },
   { href: "/coach", label: "Coach", icon: Bot },
-  { href: "/trends", label: "Trends", icon: ChartLine },
-  { href: "/plan", label: "Plan", icon: CalendarCheck2 },
+  { href: "/analysis", label: "Analysis", icon: ChartBarBig },
   { href: "/wellness", label: "Wellness", icon: HeartPulse },
   { href: "/profile", label: "Profile", icon: User },
 ];
@@ -19,7 +18,7 @@ export function BottomTabBar() {
 
   return (
     <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-slate-200/80 bg-white/95 px-2 pb-[calc(env(safe-area-inset-bottom)+0.35rem)] pt-2 backdrop-blur lg:hidden">
-      <ul className="mx-auto grid max-w-xl grid-cols-6 gap-1">
+      <ul className="mx-auto grid max-w-xl grid-cols-5 gap-1">
         {tabs.map((tab) => {
           const active = pathname === tab.href || pathname.startsWith(`${tab.href}/`);
           const Icon = tab.icon;

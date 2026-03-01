@@ -1,7 +1,6 @@
 import { AppShell } from "@/components/app-shell";
 import { SectionCard } from "@/components/section-card";
 import { DataSyncControls } from "@/components/profile/data-sync-controls";
-import { GarminConnectPanel } from "@/components/profile/garmin-connect-panel";
 
 const services = [
   { name: "Google", status: "Connected" },
@@ -15,7 +14,7 @@ export default function ProfilePage() {
     <AppShell>
       <div>
         <h1 className="text-2xl font-semibold text-slate-900">Profile & Connections</h1>
-        <p className="mt-1 text-sm text-slate-600">Manage data sources and environment status for coaching features.</p>
+        <p className="mt-1 text-sm text-slate-600">Manage connected services and preferences.</p>
       </div>
 
       <SectionCard title="Connected services">
@@ -30,10 +29,6 @@ export default function ProfilePage() {
         <div className="mt-3">
           <DataSyncControls />
         </div>
-      </SectionCard>
-
-      <SectionCard title="Garmin Connect">
-        <GarminConnectPanel />
       </SectionCard>
     </AppShell>
   );

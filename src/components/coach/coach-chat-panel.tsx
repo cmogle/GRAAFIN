@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import { useRouter } from "next/navigation";
-import { AlertTriangle, Loader2, Plus, Send } from "lucide-react";
+import { AlertTriangle, ChevronDown, Loader2, Plus, Send } from "lucide-react";
 import { CoachAvatar } from "@/components/coach/coach-avatar";
 import {
   ChatMessage,
@@ -45,6 +45,7 @@ export function CoachChatPanel() {
   const [booting, setBooting] = useState(true);
   const [stateUpdating, setStateUpdating] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [headerExpanded, setHeaderExpanded] = useState(false);
   const [context, setContext] = useState<ContextPayload | null>(null);
   const [coachModules, setCoachModules] = useState<WorkbenchModule[]>([]);
   const scrollRef = useRef<HTMLDivElement | null>(null);
@@ -319,82 +320,97 @@ export function CoachChatPanel() {
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2.5">
             <CoachAvatar size="md" />
-            <div>
+            <div className="flex items-center gap-2">
               <p className="text-sm font-semibold text-slate-900">Coach</p>
-              <p className="text-xs text-slate-500">Grounded in your data</p>
+              <span className="rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[11px] text-slate-600 lg:hidden">
+                {raceCountdown != null ? `${raceCountdown}d` : ""}
+              </span>
+              <span className={`h-2 w-2 rounded-full lg:hidden ${context?.coachState?.runningAllowed ? "bg-emerald-500" : "bg-rose-500"}`} />
             </div>
           </div>
-          <button
-            type="button"
-            onClick={startNewChat}
-            className="inline-flex min-h-10 items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 text-xs font-medium text-slate-700 hover:bg-slate-50"
-          >
-            <Plus className="h-3.5 w-3.5" />
-            New chat
-          </button>
+          <div className="flex items-center gap-1.5">
+            <button
+              type="button"
+              onClick={() => setHeaderExpanded((v) => !v)}
+              className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-600 lg:hidden"
+              aria-label={headerExpanded ? "Collapse header" : "Expand header"}
+            >
+              <ChevronDown className={`h-4 w-4 transition-transform ${headerExpanded ? "rotate-180" : ""}`} />
+            </button>
+            <button
+              type="button"
+              onClick={startNewChat}
+              className="inline-flex min-h-10 items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 text-xs font-medium text-slate-700 hover:bg-slate-50"
+            >
+              <Plus className="h-3.5 w-3.5" />
+              New chat
+            </button>
+          </div>
         </div>
 
-        <div className="mt-3 flex flex-wrap gap-2">
-          <span className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-[11px] text-slate-700">
-            Race: {context?.objective?.goalRaceName ?? "Boston Marathon"}
-            {raceCountdown != null ? ` · ${raceCountdown} days` : ""}
-          </span>
-          {context?.activeBlock?.weekIndex != null ? (
+        <div className={`overflow-hidden transition-all duration-200 ${headerExpanded ? "max-h-40" : "max-h-0 lg:max-h-40"}`}>
+          <div className="mt-3 flex flex-wrap gap-2">
             <span className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-[11px] text-slate-700">
-              Week {context.activeBlock.weekIndex} of {context.activeBlock.weekCount ?? 12}
+              Race: {context?.objective?.goalRaceName ?? "Boston Marathon"}
+              {raceCountdown != null ? ` · ${raceCountdown} days` : ""}
             </span>
-          ) : null}
-          <span className={`rounded-full px-2.5 py-1 text-[11px] ${readableState.tone}`}>
-            {readableState.label}
-          </span>
-          <span className={`rounded-full px-2.5 py-1 text-[11px] ${badgeToneForState(context?.coachState ?? null)}`}>
-            Run {context?.coachState?.runningAllowed ? "allowed" : "paused"}
-          </span>
-        </div>
+            {context?.activeBlock?.weekIndex != null ? (
+              <span className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-[11px] text-slate-700">
+                Week {context.activeBlock.weekIndex} of {context.activeBlock.weekCount ?? 12}
+              </span>
+            ) : null}
+            <span className={`rounded-full px-2.5 py-1 text-[11px] ${readableState.tone}`}>
+              {readableState.label}
+            </span>
+            <span className={`rounded-full px-2.5 py-1 text-[11px] ${badgeToneForState(context?.coachState ?? null)}`}>
+              Run {context?.coachState?.runningAllowed ? "allowed" : "paused"}
+            </span>
+          </div>
 
-        <div className="mt-2 flex flex-wrap gap-2">
-          <button
-            type="button"
-            disabled={stateUpdating}
-            onClick={() =>
-              void applyContextUpdate({
-                availabilityState: "medical_hold",
-                runningAllowed: false,
-                note: "I am not cleared to run.",
-              })
-            }
-            className="rounded-full border border-rose-200 bg-white px-3 py-1 text-xs text-rose-700 hover:bg-rose-50 disabled:opacity-60"
-          >
-            I am not cleared
-          </button>
-          <button
-            type="button"
-            disabled={stateUpdating}
-            onClick={() =>
-              void applyContextUpdate({
-                availabilityState: "return_build",
-                runningAllowed: true,
-                note: "I can run easy only.",
-              })
-            }
-            className="rounded-full border border-sky-200 bg-white px-3 py-1 text-xs text-sky-700 hover:bg-sky-50 disabled:opacity-60"
-          >
-            I can run easy only
-          </button>
-          <button
-            type="button"
-            disabled={stateUpdating}
-            onClick={() =>
-              void applyContextUpdate({
-                availabilityState: "normal",
-                runningAllowed: true,
-                note: "Goal unchanged.",
-              })
-            }
-            className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs text-slate-700 hover:bg-slate-50 disabled:opacity-60"
-          >
-            Goal unchanged
-          </button>
+          <div className="mt-2 flex flex-wrap gap-2">
+            <button
+              type="button"
+              disabled={stateUpdating}
+              onClick={() =>
+                void applyContextUpdate({
+                  availabilityState: "medical_hold",
+                  runningAllowed: false,
+                  note: "I am not cleared to run.",
+                })
+              }
+              className="rounded-full border border-rose-200 bg-white px-3 py-1 text-xs text-rose-700 hover:bg-rose-50 disabled:opacity-60"
+            >
+              I am not cleared
+            </button>
+            <button
+              type="button"
+              disabled={stateUpdating}
+              onClick={() =>
+                void applyContextUpdate({
+                  availabilityState: "return_build",
+                  runningAllowed: true,
+                  note: "I can run easy only.",
+                })
+              }
+              className="rounded-full border border-sky-200 bg-white px-3 py-1 text-xs text-sky-700 hover:bg-sky-50 disabled:opacity-60"
+            >
+              I can run easy only
+            </button>
+            <button
+              type="button"
+              disabled={stateUpdating}
+              onClick={() =>
+                void applyContextUpdate({
+                  availabilityState: "normal",
+                  runningAllowed: true,
+                  note: "Goal unchanged.",
+                })
+              }
+              className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs text-slate-700 hover:bg-slate-50 disabled:opacity-60"
+            >
+              Goal unchanged
+            </button>
+          </div>
         </div>
       </header>
 

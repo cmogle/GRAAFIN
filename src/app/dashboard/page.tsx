@@ -4,7 +4,6 @@ import { SectionCard } from "@/components/section-card";
 import { ActivitiesTable } from "@/components/dashboard/activities-table";
 import { TrendChart } from "@/components/dashboard/trend-chart";
 import { AdaptiveWorkbench } from "@/components/dashboard/adaptive-workbench";
-import { FloatingActions } from "@/components/mobile/floating-actions";
 import { buildCockpitPayload } from "@/lib/mobile/cockpit";
 import { RunActivity, paceSecPerKm, formatPace } from "@/lib/metrics/dashboard";
 import { createClient } from "@/lib/supabase/server";
@@ -135,7 +134,6 @@ export default async function DashboardPage() {
         <ActivitiesTable runs={runs} />
       </SectionCard>
 
-      <FloatingActions />
     </AppShell>
   );
 }
