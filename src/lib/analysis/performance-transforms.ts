@@ -326,8 +326,18 @@ export function computeBlockForensics(
     averageHeartrate: a.averageHeartrate,
   }));
 
-  const blocks = marathonBlockPatterns(runActivities);
-  if (!blocks.length) return [];
+  const allBlocks = marathonBlockPatterns(runActivities);
+  if (!allBlocks.length) return [];
+
+  // Filter out non-race marathon-distance runs (training runs with significant stop time)
+  const activityById = new Map(activities.map((a) => [a.id, a]));
+  const blocks = allBlocks.filter((block) => {
+    const race = activityById.get(block.raceId);
+    if (!race || !race.elapsedTimeS || race.movingTimeS <= 0) return true;
+    const stopRatio = race.elapsedTimeS / race.movingTimeS;
+    // Real races have <2% stop time; training runs have much more
+    return stopRatio < 1.05;
+  });
 
   // Build lookup maps
   const metricsByDate = new Map<string, DailyMetricRow>();
@@ -403,7 +413,8 @@ export function computeBlockForensics(
     f.paceRank = i + 1;
   });
 
-  return forensics.sort((a, b) => a.racePaceSecPerKm - b.racePaceSecPerKm);
+  // Default: chronological order
+  return forensics.sort((a, b) => a.raceDate.localeCompare(b.raceDate));
 }
 
 // ---------------------------------------------------------------------------

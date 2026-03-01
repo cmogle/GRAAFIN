@@ -1,5 +1,6 @@
 "use client";
 
+import { useState, useMemo } from "react";
 import {
   Bar,
   BarChart,
@@ -15,18 +16,50 @@ type Props = {
   blocks: MarathonBlockForensic[];
 };
 
+type SortMode = "date" | "pace";
+
 const RANK_BADGE = ["bg-amber-100 text-amber-800", "bg-slate-100 text-slate-700", "bg-orange-50 text-orange-700"];
 
 export function MarathonBlockForensics({ blocks }: Props) {
+  const [sortMode, setSortMode] = useState<SortMode>("date");
+
+  const sorted = useMemo(() => {
+    const copy = [...blocks];
+    if (sortMode === "pace") {
+      copy.sort((a, b) => a.racePaceSecPerKm - b.racePaceSecPerKm);
+    } else {
+      copy.sort((a, b) => a.raceDate.localeCompare(b.raceDate));
+    }
+    return copy;
+  }, [blocks, sortMode]);
+
   if (!blocks.length) {
     return <p className="text-sm text-slate-400">No marathon races found in data.</p>;
   }
 
   return (
     <div className="space-y-6">
+      {/* Sort controls */}
+      <div className="flex items-center gap-2">
+        <span className="text-xs text-slate-500">Sort by</span>
+        {(["date", "pace"] as const).map((mode) => (
+          <button
+            key={mode}
+            onClick={() => setSortMode(mode)}
+            className={`rounded-lg border px-2.5 py-1 text-xs font-medium transition ${
+              sortMode === mode
+                ? "border-blue-500 bg-blue-50 text-blue-700"
+                : "border-slate-200 text-slate-500 hover:border-slate-300"
+            }`}
+          >
+            {mode === "date" ? "Date" : "Fastest"}
+          </button>
+        ))}
+      </div>
+
       {/* Block comparison cards */}
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
-        {blocks.map((block) => (
+        {sorted.map((block) => (
           <div
             key={block.blockId}
             className="rounded-xl border border-slate-200 bg-white p-4"
@@ -126,7 +159,7 @@ export function MarathonBlockForensics({ blocks }: Props) {
       </div>
 
       {/* Comparison bar chart */}
-      {blocks.length >= 2 && (
+      {sorted.length >= 2 && (
         <div>
           <h4 className="mb-3 text-sm font-medium text-slate-700">
             Block comparison
@@ -134,7 +167,7 @@ export function MarathonBlockForensics({ blocks }: Props) {
           <div className="h-64 w-full">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart
-                data={blocks.map((b) => ({
+                data={sorted.map((b) => ({
                   name: b.raceDate,
                   weeklyKm: b.avgWeeklyKm,
                   longRuns: b.longRunCount,
