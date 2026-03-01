@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import { useRouter } from "next/navigation";
-import { AlertTriangle, ChevronDown, Loader2, Plus, Send } from "lucide-react";
+import { AlertTriangle, ChevronDown, CornerDownLeft, Loader2, Plus, Send, X } from "lucide-react";
 import { CoachAvatar } from "@/components/coach/coach-avatar";
 import {
   ChatMessage,
@@ -36,6 +36,43 @@ type WorkbenchModule = {
 
 const CACHE_KEY = "graafin_coach_thread_cache_v3";
 
+/** Extract quick-reply options from choice-style questions like "X, Y, or Z?" */
+function extractQuickReplies(question: string): string[] {
+  // Strip trailing punctuation for parsing
+  const cleaned = question.replace(/[?.!]+$/, "").trim();
+
+  // Look for "or" separated options: "X, Y, or Z" or "X or Y"
+  const orIdx = cleaned.lastIndexOf(" or ");
+  if (orIdx === -1) return [];
+
+  // Get the clause containing the options (after last colon/dash if present)
+  const clauseStart = Math.max(cleaned.lastIndexOf(":"), cleaned.lastIndexOf("—"), cleaned.lastIndexOf(" - "));
+  const clause = clauseStart > -1 ? cleaned.slice(clauseStart + 1).trim() : cleaned;
+
+  const orIdxInClause = clause.lastIndexOf(" or ");
+  if (orIdxInClause === -1) return [];
+
+  const beforeOr = clause.slice(0, orIdxInClause);
+  const afterOr = clause.slice(orIdxInClause + 4).trim();
+
+  // Split the before-or part by commas
+  const parts = beforeOr.split(/,\s*/).map((s) => s.trim()).filter(Boolean);
+  if (parts.length === 0) return [];
+
+  const allOptions = [...parts, afterOr].map((opt) => {
+    // Strip leading articles/prepositions that aren't meaningful as answers
+    const trimmed = opt.replace(/^(is |are |do |does |should |would |have |has |only |just )/i, "").trim();
+    // Capitalize first letter
+    return trimmed.charAt(0).toUpperCase() + trimmed.slice(1);
+  });
+
+  // Only return if we got 2-4 reasonable options (not too long)
+  if (allOptions.length < 2 || allOptions.length > 5) return [];
+  if (allOptions.some((opt) => opt.length > 40)) return [];
+
+  return allOptions;
+}
+
 export function CoachChatPanel() {
   const router = useRouter();
   const [threadId, setThreadId] = useState<string | null>(null);
@@ -45,6 +82,7 @@ export function CoachChatPanel() {
   const [booting, setBooting] = useState(true);
   const [stateUpdating, setStateUpdating] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [replyingTo, setReplyingTo] = useState<string | null>(null);
   const [headerExpanded, setHeaderExpanded] = useState(false);
   const [context, setContext] = useState<ContextPayload | null>(null);
   const [coachModules, setCoachModules] = useState<WorkbenchModule[]>([]);
@@ -290,7 +328,9 @@ export function CoachChatPanel() {
     }
     event.preventDefault();
     if (loading || !input.trim()) return;
-    void send(input);
+    const msg = replyingTo ? `[Answering: "${replyingTo}"] ${input.trim()}` : input;
+    setReplyingTo(null);
+    void send(msg);
   };
 
   const startNewChat = () => {
@@ -302,6 +342,7 @@ export function CoachChatPanel() {
     setMessages([]);
     setInput("");
     setError(null);
+    setReplyingTo(null);
     localStorage.removeItem(CACHE_KEY);
     composerRef.current?.focus();
   };
@@ -608,14 +649,57 @@ export function CoachChatPanel() {
                   key={question}
                   type="button"
                   onClick={() => {
-                    setInput(question);
+                    setReplyingTo(question);
+                    setInput("");
                     composerRef.current?.focus();
                   }}
-                  className="whitespace-nowrap rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs text-slate-600 hover:bg-slate-50"
+                  className={`whitespace-nowrap rounded-full border px-3 py-1.5 text-xs ${replyingTo === question ? "border-teal-300 bg-teal-50 text-teal-700" : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"}`}
                 >
                   {question}
                 </button>
               ))}
+            </div>
+          ) : null}
+
+          {replyingTo ? (
+            <div className="rounded-xl border border-teal-200 bg-teal-50/50 px-3 py-2">
+              <div className="flex items-start justify-between gap-2">
+                <div className="flex items-start gap-1.5 text-xs text-teal-800">
+                  <CornerDownLeft className="mt-0.5 h-3 w-3 shrink-0 text-teal-500" />
+                  <p className="leading-relaxed">{replyingTo}</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setReplyingTo(null)}
+                  className="shrink-0 rounded p-0.5 text-teal-400 hover:bg-teal-100 hover:text-teal-600"
+                  aria-label="Dismiss"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              </div>
+              {(() => {
+                const chips = extractQuickReplies(replyingTo);
+                if (chips.length === 0) return null;
+                return (
+                  <div className="mt-2 flex flex-wrap gap-1.5">
+                    {chips.map((chip) => (
+                      <button
+                        key={chip}
+                        type="button"
+                        disabled={loading}
+                        onClick={() => {
+                          const answer = `[Answering: "${replyingTo}"] ${chip}`;
+                          setReplyingTo(null);
+                          void send(answer);
+                        }}
+                        className="rounded-full border border-teal-300 bg-white px-2.5 py-1 text-xs font-medium text-teal-700 hover:bg-teal-50 disabled:opacity-60"
+                      >
+                        {chip}
+                      </button>
+                    ))}
+                  </div>
+                );
+              })()}
             </div>
           ) : null}
 
@@ -644,13 +728,17 @@ export function CoachChatPanel() {
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={onComposerKeyDown}
               className="max-h-44 min-h-16 w-full resize-y bg-transparent px-2 py-1 text-sm outline-none"
-              placeholder="Message Coach..."
+              placeholder={replyingTo ? "Type your answer..." : "Message Coach..."}
             />
             <div className="mt-2 flex items-center justify-between">
               <p className="text-xs text-slate-400">Enter to send · Shift+Enter for newline</p>
               <button
                 type="button"
-                onClick={() => void send(input)}
+                onClick={() => {
+                  const msg = replyingTo ? `[Answering: "${replyingTo}"] ${input.trim()}` : input;
+                  setReplyingTo(null);
+                  void send(msg);
+                }}
                 disabled={loading || !input.trim()}
                 className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-slate-900 text-white disabled:opacity-50"
                 aria-label="Send message"
