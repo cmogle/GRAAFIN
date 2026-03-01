@@ -1,6 +1,7 @@
 export type RunActivity = {
   id: string;
   name: string;
+  type?: string;
   startDate: string;
   distanceM: number;
   movingTimeS: number;
@@ -48,6 +49,7 @@ export function distanceBandLabel(run: RunActivity) {
 
 export function filterTrueMarathons(runs: RunActivity[]) {
   return runs.filter((run) => {
+    if (run.type && run.type.toLowerCase() !== "run") return false;
     if (run.distanceM < MARATHON_DISTANCE_M - 700) return false;
     if (run.startDate.startsWith(ANOMALOUS_MARATHON_DATE)) return false;
     return true;

@@ -205,7 +205,9 @@ const RACE_KEYWORDS = /\b(race|parkrun|5k|10k|half|hm|marathon|comp|championship
 
 export function detectRaces(activities: PerformanceActivity[]): PerformanceActivity[] {
   const marathonIds = new Set(
-    filterTrueMarathons(activities).map((m) => m.id),
+    filterTrueMarathons(activities)
+      .filter((m) => m.type?.toLowerCase() === "run")
+      .map((m) => m.id),
   );
 
   const marathons = activities.filter((a) => marathonIds.has(a.id));
@@ -316,6 +318,7 @@ export function computeBlockForensics(
   const runActivities: RunActivity[] = activities.map((a) => ({
     id: a.id,
     name: a.name,
+    type: a.type,
     startDate: a.startDate,
     distanceM: a.distanceM,
     movingTimeS: a.movingTimeS,
